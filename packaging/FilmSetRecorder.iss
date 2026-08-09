@@ -1,0 +1,35 @@
+#define MyAppName "FilmSet Recorder"
+#define MyAppVersion "0.1.0"
+#define MyAppExeName "FilmSetRecorder.exe"
+
+[Setup]
+AppId={{B560CBAA-ED80-42D5-B7CB-341CA73871C4}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppVerName={#MyAppName} {#MyAppVersion}
+DefaultDirName={autopf}\FilmSet Recorder
+DefaultGroupName=FilmSet Recorder
+DisableProgramGroupPage=yes
+OutputDir=..\release
+OutputBaseFilename=FilmSetRecorder_Setup_0.1.0
+Compression=lzma2
+SolidCompression=yes
+WizardStyle=modern
+PrivilegesRequired=lowest
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+UninstallDisplayName={#MyAppName}
+SetupLogging=yes
+
+[Files]
+Source: "..\dist\FilmSetRecorder\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Icons]
+Name: "{autoprograms}\FilmSet Recorder"; Filename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\FilmSet Recorder"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+[Tasks]
+Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
+
+[Run]
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch FilmSet Recorder"; Flags: nowait postinstall skipifsilent
