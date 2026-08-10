@@ -210,7 +210,7 @@ class PeakMeter(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
 
-        full = self.rect().adjusted(2, 1, -3, -2)
+        full = self.rect().adjusted(14, 1, -8, -2)
         scale_h = 16
         meter_top = full.top() + scale_h
         meter_width = full.width()
@@ -400,10 +400,10 @@ class TransportControl(QWidget):
         self.button = QPushButton()
         self.button.setObjectName("TransportCircle")
         self.button.setProperty("role", role)
-        size = 84 if role == "record" else 76
+        size = 96 if role == "record" else 88
         self.button.setFixedSize(size, size)
         self.button.setIcon(icon)
-        self.button.setIconSize(QSize(31 if role == "record" else 28, 31 if role == "record" else 28))
+        self.button.setIconSize(QSize(42 if role == "record" else 30, 42 if role == "record" else 30))
         self.button.setCursor(Qt.PointingHandCursor)
         layout.addWidget(self.button)
 

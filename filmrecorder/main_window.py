@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -165,43 +166,47 @@ class MainWindow(QMainWindow):
 
     def _build_menu(self) -> None:
         file_menu = self.menuBar().addMenu("File")
-        choose_action = QAction("Choose Project Folder...", self)
-        choose_action.triggered.connect(self.choose_project)
-        file_menu.addAction(choose_action)
+        self.choose_project_action = QAction("Choose Project Folder...", self)
+        self.choose_project_action.triggered.connect(self.choose_project)
+        file_menu.addAction(self.choose_project_action)
 
-        open_action = QAction("Open Project Folder", self)
-        open_action.triggered.connect(self.open_project_folder)
-        file_menu.addAction(open_action)
+        self.open_project_action = QAction("Open Project Folder", self)
+        self.open_project_action.triggered.connect(self.open_project_folder)
+        file_menu.addAction(self.open_project_action)
 
-        report_action = QAction("Open Sound Report", self)
-        report_action.triggered.connect(self.open_sound_report)
-        file_menu.addAction(report_action)
+        self.report_action = QAction("Open Sound Report", self)
+        self.report_action.triggered.connect(self.open_sound_report)
+        file_menu.addAction(self.report_action)
         file_menu.addSeparator()
 
-        exit_action = QAction("Exit", self)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
+        self.exit_action = QAction("Exit", self)
+        self.exit_action.triggered.connect(self.close)
+        file_menu.addAction(self.exit_action)
 
         tools_menu = self.menuBar().addMenu("Tools")
-        audio_setup_action = QAction("Audio Setup...", self)
-        audio_setup_action.triggered.connect(lambda: self.workspace.setCurrentIndex(4))
-        tools_menu.addAction(audio_setup_action)
+        self.audio_setup_action = QAction("Audio Setup...", self)
+        self.audio_setup_action.triggered.connect(lambda: self.workspace.setCurrentIndex(4))
+        tools_menu.addAction(self.audio_setup_action)
         tools_menu.addSeparator()
-        diagnostics_action = QAction("Save Diagnostics...", self)
-        diagnostics_action.triggered.connect(self.save_diagnostics)
-        tools_menu.addAction(diagnostics_action)
+        self.diagnostics_action = QAction("Save Diagnostics...", self)
+        self.diagnostics_action.triggered.connect(self.save_diagnostics)
+        tools_menu.addAction(self.diagnostics_action)
 
-        reset_peaks_action = QAction("Reset Meter Peaks", self)
-        reset_peaks_action.triggered.connect(self.reset_meter_peaks)
-        tools_menu.addAction(reset_peaks_action)
+        self.reset_peaks_action = QAction("Reset Meter Peaks", self)
+        self.reset_peaks_action.triggered.connect(self.reset_meter_peaks)
+        tools_menu.addAction(self.reset_peaks_action)
 
         help_menu = self.menuBar().addMenu("Help")
-        about_action = QAction("About FilmSet Recorder", self)
-        about_action.triggered.connect(self.show_about)
-        help_menu.addAction(about_action)
+        self.about_action = QAction("About FilmSet Recorder", self)
+        self.about_action.triggered.connect(self.show_about)
+        help_menu.addAction(self.about_action)
+
+        # The approved console mockup has no always-visible desktop menu bar.
+        # Keep every command available from the header gear menu instead.
+        self.menuBar().setVisible(False)
 
     def _build_ui(self) -> None:
-        """Build the v0.6.5 production-console interface.
+        """Build the v0.6.6 production-console interface.
 
         This layout intentionally follows the approved visual mockup: branded
         rail navigation, a compact production header, a large slate, calibrated
@@ -218,7 +223,7 @@ class MainWindow(QMainWindow):
         # LEFT NAV ---------------------------------------------------------
         nav = QWidget()
         nav.setObjectName("NavRail")
-        nav.setFixedWidth(88)
+        nav.setFixedWidth(104)
         nav_l = QVBoxLayout(nav)
         nav_l.setContentsMargins(8, 14, 8, 12)
         nav_l.setSpacing(8)
@@ -234,12 +239,12 @@ class MainWindow(QMainWindow):
             btn = QToolButton()
             btn.setText(text)
             btn.setIcon(_ui_icon(icon_name))
-            btn.setIconSize(QSize(25, 25))
+            btn.setIconSize(QSize(28, 28))
             btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
             btn.setObjectName("NavButton")
             btn.setCheckable(True)
             btn.setAutoExclusive(True)
-            btn.setMinimumHeight(66)
+            btn.setMinimumHeight(74)
             btn.clicked.connect(lambda _checked=False, i=index: self.workspace.setCurrentIndex(i))
             nav_l.addWidget(btn)
             self.nav_buttons.append(btn)
@@ -273,13 +278,6 @@ class MainWindow(QMainWindow):
         # BRAND / STATUS BAR -- follows the approved mockup hierarchy.
         top = QHBoxLayout()
         top.setSpacing(10)
-        brand_icon_label = QLabel()
-        brand_icon_label.setObjectName("BrandWave")
-        brand_icon_label.setFixedSize(48, 48)
-        brand_icon_label.setAlignment(Qt.AlignCenter)
-        brand_icon_label.setPixmap(brand_pixmap(44))
-        top.addWidget(brand_icon_label)
-
         product = QVBoxLayout()
         product.setSpacing(-1)
         product_name = QLabel("F I L M S E T")
@@ -320,8 +318,21 @@ class MainWindow(QMainWindow):
         system_shortcut.setObjectName("HeaderToolButton")
         system_shortcut.setIcon(_ui_icon("system"))
         system_shortcut.setIconSize(QSize(24, 24))
-        system_shortcut.setToolTip("Open System & Audio Setup")
-        system_shortcut.clicked.connect(lambda: self.workspace.setCurrentIndex(4))
+        system_shortcut.setToolTip("FilmSet Recorder menu")
+        app_menu = QMenu(system_shortcut)
+        app_menu.addAction(self.audio_setup_action)
+        app_menu.addSeparator()
+        app_menu.addAction(self.choose_project_action)
+        app_menu.addAction(self.open_project_action)
+        app_menu.addAction(self.report_action)
+        app_menu.addSeparator()
+        app_menu.addAction(self.reset_peaks_action)
+        app_menu.addAction(self.diagnostics_action)
+        app_menu.addSeparator()
+        app_menu.addAction(self.about_action)
+        app_menu.addAction(self.exit_action)
+        system_shortcut.setMenu(app_menu)
+        system_shortcut.setPopupMode(QToolButton.InstantPopup)
         top.addWidget(system_shortcut)
         body_l.addLayout(top)
 
@@ -549,7 +560,7 @@ class MainWindow(QMainWindow):
         tl.setContentsMargins(22, 8, 22, 8)
         tl.setSpacing(12)
 
-        self.record_control = TransportControl("RECORD", _ui_icon("record"), "record", "F9")
+        self.record_control = TransportControl("RECORD", _ui_icon("record_white"), "record", "F9")
         self.record_btn = self.record_control.button
         self.record_btn.clicked.connect(self.toggle_record)
         self.stop_control = TransportControl("STOP", _ui_icon("stop"), "stop", "ESC")
@@ -654,11 +665,20 @@ class MainWindow(QMainWindow):
         ntitle = QLabel("NOTES")
         ntitle.setObjectName("StripTitle")
         nc_l.addWidget(ntitle)
+        note_row = QHBoxLayout()
+        note_row.setSpacing(8)
         self.quick_notes = QTextEdit()
         self.quick_notes.setObjectName("QuickNotes")
         self.quick_notes.setPlaceholderText("Current take note…")
         self.quick_notes.setMaximumHeight(72)
-        nc_l.addWidget(self.quick_notes)
+        note_row.addWidget(self.quick_notes, 1)
+        self.add_note_btn = QPushButton("Add Note")
+        self.add_note_btn.setObjectName("AddNoteButton")
+        _button_icon(self.add_note_btn, "notes", 15)
+        self.add_note_btn.setToolTip("Focus the current take note field.")
+        self.add_note_btn.clicked.connect(self.quick_notes.setFocus)
+        note_row.addWidget(self.add_note_btn, 0, Qt.AlignBottom)
+        nc_l.addLayout(note_row)
         ps.addWidget(notes_compact, 4)
         record_l.addWidget(production_strip)
 
@@ -1289,7 +1309,7 @@ class MainWindow(QMainWindow):
             self._set_track_visibility(self.audio.channels)
             self.diag_audio.setText(f"{self.audio.channels}ch / {self.audio.sample_rate // 1000}k")
             self.audio_pill.setText("AUDIO READY")
-            self.audio_pill.set_tone("ready")
+            self.audio_pill.set_tone("active")
             selected_name = self.input_combo.currentText().split("  [", 1)[0].strip()
             self.audio_pill.set_detail(f"{selected_name} · {self.audio.sample_rate // 1000}k/24")
             if hasattr(self, "quick_audio_state"):
@@ -1477,7 +1497,7 @@ class MainWindow(QMainWindow):
             self.record_btn.setIcon(_ui_icon("record"))
             ready = self.audio.stream is not None
             self.state_pill.setText("READY" if ready else "IDLE")
-            self.state_pill.set_tone("ready" if ready else "neutral")
+            self.state_pill.set_tone("neutral")
             self._set_recorder_badge("READY" if ready else "IDLE", "ready" if ready else "idle")
             if hasattr(self, "footer_state"):
                 self.footer_state.setText("●  Ready" if ready else "○  Idle")
@@ -1490,7 +1510,7 @@ class MainWindow(QMainWindow):
             self.audio.stop_playback()
             if self.audio.stream is not None:
                 self.state_pill.setText("READY")
-                self.state_pill.set_tone("ready")
+                self.state_pill.set_tone("neutral")
                 self._set_recorder_badge("READY", "ready")
                 self.status_text.setText("Playback stopped. Audio ready.")
 
@@ -1652,7 +1672,7 @@ class MainWindow(QMainWindow):
                 self._set_recorder_badge("PLAYBACK", "playback")
             elif self.audio.stream is not None and self.current_take_path is None:
                 self.state_pill.setText("READY")
-                self.state_pill.set_tone("ready")
+                self.state_pill.set_tone("neutral")
                 self._set_recorder_badge("READY", "ready")
 
         self.diag_xruns.setText(str(self.audio.xrun_count))

@@ -45,6 +45,8 @@ def icon_pixmap(name: str, size: int = 64) -> QPixmap:
 
     if n == 'record':
         p.setPen(Qt.NoPen); p.setBrush(RED); p.drawEllipse(QRectF(18,18,28,28))
+    elif n == 'record_white':
+        p.setPen(Qt.NoPen); p.setBrush(QColor('#FFFFFF')); p.drawEllipse(QRectF(18,18,28,28))
     elif n == 'stop':
         p.setPen(Qt.NoPen); p.setBrush(FG); p.drawRoundedRect(QRectF(19,19,26,26), 3, 3)
     elif n == 'play':

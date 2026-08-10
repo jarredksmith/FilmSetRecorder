@@ -1,5 +1,5 @@
 #define MyAppName "FilmSet Recorder"
-#define MyAppVersion "0.6.5"
+#define MyAppVersion "0.6.6"
 #define MyAppExeName "FilmSetRecorder.exe"
 
 [Setup]
@@ -11,7 +11,7 @@ DefaultDirName={localappdata}\Programs\FilmSet Recorder
 DefaultGroupName=FilmSet Recorder
 DisableProgramGroupPage=yes
 OutputDir=..\release
-OutputBaseFilename=FilmSetRecorder_Setup_0.6.5
+OutputBaseFilename=FilmSetRecorder_Setup_0.6.6
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

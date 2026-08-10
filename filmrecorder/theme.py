@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# FilmSet Recorder v0.6.5 visual system
+# FilmSet Recorder v0.6.6 visual system
 # Closely follows the approved production-console mockup: layered navy surfaces,
 # restrained cobalt accents, highly legible recorder typography, circular
 # transport controls, and calibrated audio instrumentation.
@@ -26,7 +26,7 @@ QMenu::item { padding:7px 30px 7px 12px; }
 QMenu::item:selected { background:#17304C; }
 
 /* Left rail */
-QWidget#NavRail { background:#050D16; border-right:1px solid #14283B; }
+QWidget#NavRail { background:#050D16; border-right:1px solid #14283B; min-width:104px; max-width:104px; }
 QLabel#LogoMark { background:transparent; border:0; }
 QToolButton#NavButton {
     background:transparent; color:#8092A6; border:1px solid transparent;
@@ -48,7 +48,7 @@ QFrame#HeaderDivider { color:#20384F; background:#20384F; border:0; max-width:1p
 QLabel#ProjectTitle { color:#F5FAFF; font-size:18px; font-weight:750; background:transparent; }
 QLabel#AppSubtitle { color:#758BA1; font-size:10px; background:transparent; }
 QLabel#FormatReadout { color:#7DA6C9; font-family:"SF Mono","Cascadia Mono",Consolas,monospace; font-size:9px; font-weight:700; background:transparent; }
-QToolButton#HeaderToolButton { background:transparent; border:0; border-left:1px solid #20384F; padding-left:10px; min-width:36px; }
+QToolButton#HeaderToolButton { background:transparent; border:0; border-left:1px solid #20384F; padding-left:12px; min-width:42px; }
 QToolButton#HeaderToolButton:hover { background:#0D1F30; border-radius:8px; }
 
 /* Status cards */
@@ -56,6 +56,7 @@ QFrame#StatusPill {
     background:#0A1724; border:1px solid #203B55; border-radius:8px;
     min-width:106px;
 }
+QFrame#StatusPill[tone="active"] { border-color:#24567A; background:#0A1D2E; }
 QFrame#StatusPill[tone="ready"] { border-color:#145C3A; background:#08291D; }
 QFrame#StatusPill[tone="recording"] { border-color:#8A2933; background:#3A1016; }
 QFrame#StatusPill[tone="warning"] { border-color:#725621; background:#241D0A; }
@@ -63,6 +64,8 @@ QFrame#StatusPill[tone="danger"] { border-color:#89323A; background:#351117; }
 QLabel#StatusPillIcon { background:transparent; border:0; }
 QLabel#StatusPillText { background:transparent; color:#C2D0DE; font-size:9px; font-weight:850; letter-spacing:.4px; }
 QLabel#StatusPillDetail { background:transparent; color:#91A4B7; font-size:9px; }
+QFrame#StatusPill[tone="active"] QLabel#StatusPillText { color:#79C8FF; }
+QFrame#StatusPill[tone="active"] QLabel#StatusPillDetail { color:#A7C6DE; }
 QFrame#StatusPill[tone="ready"] QLabel#StatusPillText { color:#6CE7A4; }
 QFrame#StatusPill[tone="ready"] QLabel#StatusPillDetail { color:#A8DCC1; }
 QFrame#StatusPill[tone="recording"] QLabel#StatusPillText { color:#FF949D; }
@@ -119,7 +122,8 @@ QPushButton:pressed { background:#091521; }
 QPushButton:disabled { color:#526579; border-color:#172A3B; background:#0A1621; }
 QPushButton[role="primary"] { background:#0B477A; color:#F4FAFF; border-color:#197BC6; }
 QPushButton[role="primary"]:hover { background:#0D5796; border-color:#2E9CFF; }
-QPushButton#QuickApplyButton { min-width:80px; }
+QPushButton#QuickApplyButton { min-width:92px; }
+QPushButton#AddNoteButton { min-height:34px; padding:7px 12px; }
 
 /* ISO track console */
 QFrame#TrackRow {
@@ -173,13 +177,13 @@ QLabel#TinyState { color:#72D69B; font-family:"SF Mono",Consolas,monospace; font
 QFrame#TransportDeck { background:transparent; border:0; }
 QWidget#TransportControl { background:transparent; }
 QPushButton#TransportCircle {
-    background:#0B1A29; border:1px solid #345878; border-radius:38px; padding:0;
+    background:#0B1A29; border:1px solid #345878; border-radius:44px; padding:0;
 }
 QPushButton#TransportCircle:hover { background:#10263A; border-color:#5D8FB9; }
 QPushButton#TransportCircle:pressed { background:#07131F; }
 QPushButton#TransportCircle[role="record"] {
     background:qradialgradient(cx:.42,cy:.35,radius:.9,fx:.42,fy:.35, stop:0 #FF3C49, stop:.7 #E82030, stop:1 #A71320);
-    border:1px solid #FF5E69; border-radius:42px;
+    border:1px solid #FF5E69; border-radius:48px;
 }
 QPushButton#TransportCircle[role="record"]:hover { background:#FF293B; border-color:#FF8A91; }
 QPushButton#TransportCircle[role="circle"]:checked { background:#3A2B09; border-color:#B28724; }

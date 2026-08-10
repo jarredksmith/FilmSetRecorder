@@ -100,3 +100,24 @@ class MockupParityStaticTests(unittest.TestCase):
         self.assertIn('self._rms_db', self.widgets)
         self.assertIn('RMS', self.widgets)
         self.assertIn('rms_values', self.main)
+
+class MockupParityV066StaticTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(__file__).resolve().parents[1]
+        self.main = (self.root / "filmrecorder" / "main_window.py").read_text(encoding="utf-8")
+        self.widgets = (self.root / "filmrecorder" / "widgets.py").read_text(encoding="utf-8")
+        self.icons = (self.root / "filmrecorder" / "ui_icons.py").read_text(encoding="utf-8")
+
+    def test_console_hides_legacy_menu_bar_but_keeps_header_menu(self):
+        self.assertIn('self.menuBar().setVisible(False)', self.main)
+        self.assertIn('app_menu = QMenu(system_shortcut)', self.main)
+        self.assertIn('self.choose_project_action', self.main)
+        self.assertIn('self.audio_setup_action', self.main)
+
+    def test_primary_record_transport_uses_white_center_dot(self):
+        self.assertIn('_ui_icon("record_white")', self.main)
+        self.assertIn("elif n == 'record_white'", self.icons)
+        self.assertIn("QColor('#FFFFFF')", self.icons)
+
+    def test_meter_has_safe_endpoint_insets(self):
+        self.assertIn('self.rect().adjusted(14, 1, -8, -2)', self.widgets)

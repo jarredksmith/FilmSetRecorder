@@ -63,3 +63,13 @@ The approved `assets/DESIGN_REFERENCE_v0_6.png` is the visual reference for the 
 - the Record workspace always exposes last take, recent history, and current notes without opening another page
 - hardware channel capacity is discoverable through an inline Add Input control when unused inputs exist
 - settings remain secondary to recording state and metering
+
+
+## v0.6.6 parity refinements
+
+- The Record workspace hides the traditional menu bar and moves application commands into the header gear menu, matching the approved console reference.
+- The header uses a single brand mark in the navigation rail; the content header carries only the FILMSET / RECORDER wordmark and project identity.
+- Audio-ready status uses the restrained blue instrumentation treatment; green is reserved for live remote connectivity and other explicit healthy states.
+- The primary Record transport uses a white center-dot glyph on the red transport button.
+- Meter scale labels include safe horizontal inset so the -60 and 0 dBFS endpoints remain legible.
+- The production strip includes an Add Note affordance beside the current-take notes field.

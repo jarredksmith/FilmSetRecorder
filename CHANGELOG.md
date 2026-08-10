@@ -1,5 +1,17 @@
 # Changelog
 
+
+## 0.6.6
+
+- Closed another round of visual parity gaps against the approved mockup.
+- Hidden the always-visible desktop menu bar; commands remain available from the header gear menu.
+- Removed duplicate waveform branding from the content header.
+- Added restrained blue Audio Ready state styling and neutral Ready recorder status.
+- Increased navigation and circular transport proportions.
+- Fixed the primary Record transport glyph to render as a high-contrast white center dot.
+- Added safe meter-scale insets so -60 dBFS is not clipped.
+- Added an Add Note affordance in the production strip.
+
 ## 0.6.5
 - Replaced file-dependent desktop UI icons with runtime-rendered vector-style Qt icons.
 - Fixed packaged builds where sidebar/transport/status icons disappeared.
