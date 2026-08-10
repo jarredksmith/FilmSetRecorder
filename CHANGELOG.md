@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.4
+- Replaced file-dependent desktop UI icons with runtime-rendered vector-style Qt icons.
+- Fixed packaged builds where sidebar/transport/status icons disappeared.
+- Made the application window icon independent of packaged PNG lookup.
+- Added explicit Windows shortcut icon staging and shell refresh hint.
+- Regenerated Windows ICO with BMP frames for shell compatibility.
+- Replaced ambiguous ARM styling with clear red REC / gray OFF states.
+- Added explanatory record-enable tooltip.
+- Added always-visible device-selector chevrons.
+
 ## 0.6.3
 
 - Added a packaged 27-icon FilmSet UI icon set used throughout desktop navigation, section headers, status cards, transport, take tools, remote controls, and system actions.

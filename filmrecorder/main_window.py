@@ -53,8 +53,9 @@ from .power import PowerInhibitor
 from .session import ProjectSession, TakeMetadata
 from .theme import APP_STYLESHEET
 from .utils import advance_take_number, format_duration, resource_path
+from .ui_icons import brand_icon, brand_pixmap, make_icon
 from .version import APP_NAME, APP_VERSION, ORGANIZATION_NAME
-from .widgets import Card, StatusPill, TrackRow, TransportButton
+from .widgets import Card, DeviceComboBox, StatusPill, TrackRow, TransportButton
 
 LOGGER = logging.getLogger("filmsetrecorder.ui")
 
@@ -77,9 +78,12 @@ def _default_project_dir() -> Path:
 
 
 def _ui_icon(name: str) -> QIcon:
-    """Load a packaged FilmSet UI icon. Returns an empty QIcon on failure."""
-    path = resource_path(Path("assets") / "icons" / f"{name}.png")
-    return QIcon(str(path)) if path.exists() else QIcon()
+    """Return a vector-rendered product icon.
+
+    UI icons are generated in Qt at runtime so a packaging/layout change can
+    never make the controls silently lose their graphics.
+    """
+    return make_icon(name, 64)
 
 
 def _icon_label(name: str, size: int = 20) -> QLabel:
@@ -220,9 +224,7 @@ class MainWindow(QMainWindow):
         logo.setObjectName("LogoMark")
         logo.setAlignment(Qt.AlignCenter)
         logo.setFixedHeight(56)
-        brand_pix = QPixmap(str(resource_path("assets/icon.png")))
-        if not brand_pix.isNull():
-            logo.setPixmap(brand_pix.scaled(42, 42, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        logo.setPixmap(brand_pixmap(42))
         nav_l.addWidget(logo)
         self.nav_buttons = []
         def nav_button(text: str, icon_name: str, index: int):
@@ -271,11 +273,7 @@ class MainWindow(QMainWindow):
         brand_icon.setObjectName("BrandWave")
         brand_icon.setFixedSize(46, 46)
         brand_icon.setAlignment(Qt.AlignCenter)
-        brand_pixmap = QPixmap(str(resource_path("assets/icon.png")))
-        if not brand_pixmap.isNull():
-            brand_icon.setPixmap(brand_pixmap.scaled(42, 42, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        else:
-            brand_icon.setText("FS")
+        brand_icon.setPixmap(brand_pixmap(42))
         top.addWidget(brand_icon)
         brand = QVBoxLayout()
         brand.setSpacing(0)
@@ -384,7 +382,7 @@ class MainWindow(QMainWindow):
         self.clock = QLabel("00:00:00.000"); self.clock.setObjectName("HeroClock"); self.clock.setAlignment(Qt.AlignCenter); rl.addWidget(self.clock)
         self.transport_slate = QLabel("A001 · SC 1 · T001"); self.transport_slate.setObjectName("TransportSlate"); self.transport_slate.setAlignment(Qt.AlignCenter); rl.addWidget(self.transport_slate)
         qlab = QLabel("INPUT DEVICE"); qlab.setObjectName("FieldLabel"); rl.addWidget(qlab)
-        self.input_combo = QComboBox(); self.input_combo.setObjectName("InputDeviceCombo"); self.input_combo.setMinimumHeight(40); rl.addWidget(self.input_combo)
+        self.input_combo = DeviceComboBox(); self.input_combo.setObjectName("InputDeviceCombo"); self.input_combo.setMinimumHeight(40); rl.addWidget(self.input_combo)
         self.device_hint = QLabel("Select the interface that carries your production microphones."); self.device_hint.setObjectName("AppSubtitle"); self.device_hint.setWordWrap(True); rl.addWidget(self.device_hint)
         self.apply_audio_button = QPushButton("Start / Apply Audio"); _button_icon(self.apply_audio_button, "play", 18); self.apply_audio_button.setProperty("role", "primary"); self.apply_audio_button.clicked.connect(self.apply_audio); rl.addWidget(self.apply_audio_button)
         self.awake_check = QCheckBox("Keep computer awake"); self.awake_check.toggled.connect(self._set_power_mode); rl.addWidget(self.awake_check)
@@ -453,8 +451,8 @@ class MainWindow(QMainWindow):
         sh = QHBoxLayout(); sh.addWidget(_icon_label("system",24)); st = QLabel("SYSTEM & AUDIO SETUP"); st.setObjectName("WorkspaceTitle"); sh.addWidget(st); sh.addStretch(1); spl.addLayout(sh)
         audio_setup_note = QLabel("Input and output routing is always available here, even when the compact Record view is resized."); audio_setup_note.setObjectName("AppSubtitle"); spl.addWidget(audio_setup_note)
         grid = QGridLayout(); grid.setHorizontalSpacing(14); grid.setVerticalSpacing(8)
-        self.system_input_combo = QComboBox(); self.system_input_combo.setObjectName("SystemInputDeviceCombo")
-        self.output_combo = QComboBox(); self.sample_combo = QComboBox(); self.sample_combo.addItems(["48000","96000"]); self.channels_spin = QSpinBox(); self.channels_spin.setRange(1,self.MAX_TRACK_ROWS); self.channels_spin.setValue(4); self.buffer_combo=QComboBox(); self.buffer_combo.addItems(["256","512","1024"]); self.buffer_combo.setCurrentText("512"); self.preroll_spin=QDoubleSpinBox(); self.preroll_spin.setRange(0.0,10.0); self.preroll_spin.setSingleStep(1.0); self.preroll_spin.setSuffix(" sec"); self.preroll_spin.setValue(5.0)
+        self.system_input_combo = DeviceComboBox(); self.system_input_combo.setObjectName("SystemInputDeviceCombo")
+        self.output_combo = DeviceComboBox(); self.sample_combo = QComboBox(); self.sample_combo.addItems(["48000","96000"]); self.channels_spin = QSpinBox(); self.channels_spin.setRange(1,self.MAX_TRACK_ROWS); self.channels_spin.setValue(4); self.buffer_combo=QComboBox(); self.buffer_combo.addItems(["256","512","1024"]); self.buffer_combo.setCurrentText("512"); self.preroll_spin=QDoubleSpinBox(); self.preroll_spin.setRange(0.0,10.0); self.preroll_spin.setSingleStep(1.0); self.preroll_spin.setSuffix(" sec"); self.preroll_spin.setValue(5.0)
         fields=(("INPUT DEVICE",self.system_input_combo),("OUTPUT DEVICE",self.output_combo),("SAMPLE RATE",self.sample_combo),("INPUT CHANNELS",self.channels_spin),("BUFFER",self.buffer_combo),("PRE-ROLL",self.preroll_spin))
         for i,(name,w) in enumerate(fields):
             lab=QLabel(name); lab.setObjectName("FieldLabel"); grid.addWidget(lab,(i//2)*2,i%2); grid.addWidget(w,(i//2)*2+1,i%2)
@@ -1368,12 +1366,10 @@ def run() -> None:
     app.setOrganizationName(ORGANIZATION_NAME)
     app.setStyle("Fusion")
     app.setStyleSheet(APP_STYLESHEET)
-    icon_path = resource_path("assets/icon.png")
-    if icon_path.exists():
-        app.setWindowIcon(QIcon(str(icon_path)))
+    product_icon = brand_icon(256)
+    app.setWindowIcon(product_icon)
 
     win = MainWindow()
-    if icon_path.exists():
-        win.setWindowIcon(QIcon(str(icon_path)))
+    win.setWindowIcon(product_icon)
     win.show()
     sys.exit(app.exec())

@@ -79,7 +79,8 @@ QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit {
 }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QTextEdit:focus { border-color:#1E91FF; background:#081827; }
 QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled { color:#617488; border-color:#162A3D; }
-QComboBox::drop-down { border:0; width:26px; }
+QComboBox { padding-right:32px; }
+QComboBox::drop-down { border:0; width:30px; }
 QComboBox QAbstractItemView { background:#0A1724; color:#EAF3FA; border:1px solid #29445E; selection-background-color:#143B60; }
 
 QPushButton { background:#0E1D2B; color:#C9D7E4; border:1px solid #29435A; border-radius:7px; padding:8px 12px; font-weight:700; }
@@ -111,8 +112,14 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
 QFrame#TrackRow { background:#081522; border:1px solid #173047; border-radius:8px; }
 QFrame#TrackRow:hover { background:#0A1B2A; border-color:#254A68; }
 QLabel#ChannelNumber { color:#F1F6FA; font-family:"SF Mono",Consolas,monospace; font-size:12px; font-weight:800; background:transparent; }
-QPushButton#ArmButton { background:#0A3826; color:#80F1AA; border:1px solid #157A4B; border-radius:6px; padding:5px 7px; font-size:9px; font-weight:900; }
-QPushButton#ArmButton:checked { background:#0D522F; color:#B2FFCE; border-color:#1FA75E; }
+QPushButton#ArmButton {
+    background:#0A151F; color:#71869A; border:1px solid #2A3E51; border-radius:6px;
+    padding:5px 7px; font-size:9px; font-weight:900;
+}
+QPushButton#ArmButton:hover { background:#102130; color:#AFC0CF; border-color:#466179; }
+QPushButton#ArmButton:checked { background:#401219; color:#FFD6D9; border-color:#C83D49; }
+QPushButton#ArmButton:checked:hover { background:#55151E; border-color:#FF5661; }
+QPushButton#ArmButton:disabled { background:#09131C; color:#445464; border-color:#1B2B39; }
 QLineEdit#TrackName { background:transparent; border:1px solid transparent; color:#F0F5FA; font-size:12px; font-weight:800; padding:4px; }
 QLineEdit#TrackName:focus { background:#07131F; border-color:#1E91FF; }
 QLabel#DbReadout { color:#D5E2ED; font-family:"SF Mono",Consolas,monospace; font-size:10px; background:transparent; }

@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-Write-Host "=== FilmSet Recorder 0.3 Windows Builder ===" -ForegroundColor Cyan
+Write-Host "=== FilmSet Recorder 0.6.4 Windows Builder ===" -ForegroundColor Cyan
 
 if (-not (Get-Command py -ErrorAction SilentlyContinue) -and -not (Get-Command python -ErrorAction SilentlyContinue)) {
     throw "Python was not found. Install Python 3.12 (64-bit) and rerun this script. GitHub Actions users do not need Python locally."
@@ -31,6 +31,9 @@ New-Item -ItemType Directory -Force release | Out-Null
 
 & $venvPython -m PyInstaller --noconfirm --clean packaging\FilmSetRecorder.spec
 
+# Keep branding beside the executable as well as inside PyInstaller _internal.
+Copy-Item -Path assets -Destination dist\FilmSetRecorder\assets -Recurse -Force
+
 $possibleIscc = @(
     "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
     "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
@@ -50,4 +53,4 @@ if (-not $iscc) {
 
 Write-Host ""
 Write-Host "Build complete." -ForegroundColor Green
-Write-Host "Installer: release\FilmSetRecorder_Setup_0.6.3.exe" -ForegroundColor Green
+Write-Host "Installer: release\FilmSetRecorder_Setup_0.6.4.exe" -ForegroundColor Green

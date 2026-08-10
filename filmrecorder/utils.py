@@ -7,8 +7,25 @@ from pathlib import Path
 
 
 def resource_path(relative: str | Path) -> Path:
-    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
-    return base / Path(relative)
+    """Resolve bundled resources in source, PyInstaller one-dir, or one-file layouts.
+
+    PyInstaller 6 normally places one-dir support files below ``_internal``.
+    We also ship selected resources beside the executable on Windows. Searching
+    each supported layout makes web/assets resilient to packaging changes.
+    """
+    rel = Path(relative)
+    candidates: list[Path] = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.append(Path(meipass) / rel)
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates.extend([exe_dir / rel, exe_dir / "_internal" / rel])
+    candidates.extend([Path(__file__).resolve().parents[1] / rel, Path.cwd() / rel])
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0] if candidates else Path(__file__).resolve().parents[1] / rel
 
 
 def safe_filename_component(value: str, fallback: str) -> str:

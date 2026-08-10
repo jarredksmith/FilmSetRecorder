@@ -3,9 +3,12 @@ from __future__ import annotations
 import math
 import time
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QPointF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen
+
+from .ui_icons import make_icon
 from PySide6.QtWidgets import (
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -15,6 +18,28 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+
+class DeviceComboBox(QComboBox):
+    """Dark device selector with a guaranteed visible disclosure chevron."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip("Click to choose an audio device")
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        pen = QPen(QColor("#A9C0D5"), 1.8)
+        pen.setCapStyle(Qt.RoundCap)
+        painter.setPen(pen)
+        x = self.width() - 17
+        y = self.height() / 2.0 - 2
+        painter.drawLine(QPointF(x - 4, y), QPointF(x, y + 4))
+        painter.drawLine(QPointF(x, y + 4), QPointF(x + 4, y))
+        painter.end()
 
 
 class Card(QFrame):
@@ -191,12 +216,17 @@ class TrackRow(QFrame):
         self.channel_label.setFixedWidth(40)
         row.addWidget(self.channel_label)
 
-        self.arm_button = QPushButton("ARM")
+        self.arm_button = QPushButton()
         self.arm_button.setObjectName("ArmButton")
         self.arm_button.setCheckable(True)
         self.arm_button.setChecked(True)
-        self.arm_button.setFixedWidth(52)
-        self.arm_button.toggled.connect(lambda value: self.armedChanged.emit(self.channel_index, value))
+        self.arm_button.setFixedWidth(78)
+        self.arm_button.setToolTip(
+            "Record-enable this input. REC means its audio is written to the take; "
+            "OFF means the input is still metered but its recorded channel is silent."
+        )
+        self.arm_button.toggled.connect(self._arm_state_changed)
+        self._update_arm_button(True)
         row.addWidget(self.arm_button)
 
         self.name_edit = QLineEdit(name)
@@ -223,6 +253,23 @@ class TrackRow(QFrame):
         self.clip_label.setFixedWidth(42)
         self.clip_label.setVisible(False)
         row.addWidget(self.clip_label)
+
+    def _update_arm_button(self, armed: bool) -> None:
+        self.arm_button.setText("REC" if armed else "OFF")
+        self.arm_button.setIcon(make_icon("record", 40) if armed else QIcon())
+        self.arm_button.setIconSize(QSize(12, 12))
+        self.arm_button.setProperty("recordState", "armed" if armed else "off")
+        self.arm_button.setAccessibleName(
+            f"Track {self.channel_index + 1} record enabled" if armed
+            else f"Track {self.channel_index + 1} record disabled"
+        )
+        self.arm_button.style().unpolish(self.arm_button)
+        self.arm_button.style().polish(self.arm_button)
+        self.arm_button.update()
+
+    def _arm_state_changed(self, armed: bool) -> None:
+        self._update_arm_button(armed)
+        self.armedChanged.emit(self.channel_index, armed)
 
     def set_level(self, db: float) -> None:
         self.meter.set_level(db)
