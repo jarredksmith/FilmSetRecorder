@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# FilmSet Recorder v0.6.6 visual system
+# FilmSet Recorder v0.7.0 visual system
 # Closely follows the approved production-console mockup: layered navy surfaces,
 # restrained cobalt accents, highly legible recorder typography, circular
 # transport controls, and calibrated audio instrumentation.
@@ -30,7 +30,8 @@ QWidget#NavRail { background:#050D16; border-right:1px solid #14283B; min-width:
 QLabel#LogoMark { background:transparent; border:0; }
 QToolButton#NavButton {
     background:transparent; color:#8092A6; border:1px solid transparent;
-    border-radius:9px; padding:7px 3px; font-size:10px; font-weight:650;
+    border-radius:9px; padding:6px 0px; font-size:10px; font-weight:650; text-align:center;
+    min-width:84px; max-width:84px;
 }
 QToolButton#NavButton:hover { background:#0B1C2D; color:#E8F2FA; }
 QToolButton#NavButton:checked {
@@ -145,6 +146,7 @@ QPushButton#ArmButton:hover { background:#102130; color:#D5E2ED; }
 QLabel#MeterLabel { color:#718AA1; font-size:7px; font-weight:800; letter-spacing:.5px; background:transparent; }
 QLabel#MeterValue { color:#F3F8FC; font-family:"SF Mono",Consolas,monospace; font-size:10px; font-weight:700; background:transparent; }
 QLabel#MeterValueSecondary { color:#AFC2D3; font-family:"SF Mono",Consolas,monospace; font-size:9px; background:transparent; }
+QLabel#TrackSourceBadge { color:#7EA9C9; background:#0B1B29; border:1px solid #25445D; border-radius:4px; padding:2px 5px; font-size:7px; font-weight:800; }
 QLabel#ClipBadge { color:#FFF; background:#CB2635; border-radius:4px; font-size:8px; font-weight:900; }
 QPushButton#AddInputButton {
     background:transparent; color:#6FAFE3; border:1px dashed #2A5579; border-radius:7px;
@@ -204,6 +206,28 @@ QLabel#HistoryRow { color:#C4D2DF; background:#081522; border-bottom:1px solid #
 QTextEdit#QuickNotes { background:#07131F; border:1px solid #223C54; border-radius:6px; font-size:9px; padding:6px; }
 QFrame#StripDivider { color:#1A3349; background:#1A3349; border:0; max-width:1px; }
 QLabel#FooterMessage { color:#8095A8; font-size:8px; background:transparent; margin-left:8px; }
+
+/* Take review / waveform */
+QFrame#TakeInspector {
+    background:qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #0B1A28, stop:1 #07131F);
+    border:1px solid #1A344C; border-radius:10px; min-width:390px;
+}
+QLabel#TakeInspectorTitle { color:#F4F8FC; font-size:14px; font-weight:850; letter-spacing:.4px; background:transparent; }
+QLabel#TakeInspectorMeta { color:#829CB4; font-family:"SF Mono",Consolas,monospace; font-size:9px; background:transparent; }
+QWidget#WaveformWidget { background:#06111B; border:0; }
+QLabel#TakePlaybackTime { color:#AFC4D7; font-family:"SF Mono",Consolas,monospace; font-size:10px; background:transparent; }
+QTextEdit#SelectedTakeNotes { background:#07131F; border:1px solid #28445D; border-radius:7px; font-size:10px; padding:7px; }
+
+/* ISO routing / post-converter trim */
+QFrame#RoutingPanel { background:#081522; border:1px solid #1A344C; border-radius:9px; }
+QScrollArea#RoutingScroll { background:transparent; border:0; }
+QLabel#RoutingTrackLabel { color:#DDE8F2; font-size:10px; font-weight:750; background:transparent; }
+QComboBox#RouteSourceCombo { min-height:25px; padding:4px 26px 4px 8px; font-size:9px; }
+QLabel#TrimValue { color:#9EC2DE; font-family:"SF Mono",Consolas,monospace; font-size:9px; background:transparent; }
+QSlider#RecordTrimSlider::groove:horizontal { height:5px; background:#102A3E; border-radius:2px; }
+QSlider#RecordTrimSlider::sub-page:horizontal { background:#1C86D1; border-radius:2px; }
+QSlider#RecordTrimSlider::handle:horizontal { width:14px; margin:-5px 0; border-radius:7px; background:#D9EEFF; border:1px solid #3A7EAF; }
+QSlider#RecordTrimSlider::handle:horizontal:hover { background:#FFFFFF; border-color:#52AFFF; }
 
 /* Tables / secondary pages */
 QTableWidget#TakeTable { background:#081522; alternate-background-color:#0A1927; border:1px solid #1D3950; border-radius:8px; gridline-color:transparent; selection-background-color:#123F64; selection-color:#FFFFFF; }

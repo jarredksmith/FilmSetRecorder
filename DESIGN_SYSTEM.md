@@ -73,3 +73,14 @@ The approved `assets/DESIGN_REFERENCE_v0_6.png` is the visual reference for the 
 - The primary Record transport uses a white center-dot glyph on the red transport button.
 - Meter scale labels include safe horizontal inset so the -60 and 0 dBFS endpoints remain legible.
 - The production strip includes an Add Note affordance beside the current-take notes field.
+
+
+## v0.7.0 take-review and routing rules
+
+- Left-rail navigation controls must have identical dimensions and centered icon/text alignment.
+- Primary recording meters stay visually dominant; routing and trim live in System rather than crowding the Record surface.
+- Completed takes use a dedicated waveform inspector with a single high-contrast playback playhead.
+- Physical source identity is shown as a compact badge on each ISO row.
+- Stereo devices use explicit `L` / `R` source labels.
+- Software level control is always labeled **digital trim**, never hardware gain.
+- Positive digital trim must not imply protection from analog or A/D clipping.

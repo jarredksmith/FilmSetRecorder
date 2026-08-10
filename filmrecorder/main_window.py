@@ -14,7 +14,7 @@ from pathlib import Path
 
 import qrcode
 import soundfile as sf
-from PySide6.QtCore import QSize, QSettings, QStandardPaths, QTimer, Qt, QUrl
+from PySide6.QtCore import QObject, QRunnable, QSize, QSettings, QStandardPaths, QThreadPool, QTimer, Qt, QUrl, Signal
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QImage, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSlider,
     QSizePolicy,
     QSpinBox,
     QSplitter,
@@ -56,9 +57,36 @@ from .theme import APP_STYLESHEET
 from .utils import advance_take_number, format_duration, resource_path
 from .ui_icons import brand_icon, brand_pixmap, make_icon
 from .version import APP_NAME, APP_VERSION, ORGANIZATION_NAME
-from .widgets import Card, DeviceComboBox, StatusPill, TrackRow, TransportButton, TransportControl
+from .widgets import Card, DeviceComboBox, StatusPill, TrackRow, TransportButton, TransportControl, WaveformWidget
 
 LOGGER = logging.getLogger("filmsetrecorder.ui")
+
+
+class _WaveformSignals(QObject):
+    ready = Signal(str, object, object, float)
+    failed = Signal(str, str)
+
+
+class _WaveformTask(QRunnable):
+    def __init__(self, session: ProjectSession, take_id: str, path: Path, points: int = 1400):
+        super().__init__()
+        self.session = session
+        self.take_id = take_id
+        self.path = Path(path)
+        self.points = points
+        self.signals = _WaveformSignals()
+
+    def run(self) -> None:
+        try:
+            data = self.session.waveform_peaks(self.path, self.points)
+            self.signals.ready.emit(
+                self.take_id,
+                data.get("mins", []),
+                data.get("maxs", []),
+                float(data.get("duration_seconds", 0.0)),
+            )
+        except Exception as exc:
+            self.signals.failed.emit(self.take_id, str(exc))
 
 
 def _local_ip() -> str:
@@ -123,6 +151,12 @@ class MainWindow(QMainWindow):
         self._remote_state_cache: dict = {}
         self.last_meter_values: list[float] = [-80.0] * 4
         self.last_rms_values: list[float] = [-80.0] * 4
+        self.last_track_meter_values: list[float] = [-80.0] * 4
+        self.last_track_rms_values: list[float] = [-80.0] * 4
+        self.waveform_pool = QThreadPool.globalInstance()
+        self._waveform_request_id = ""
+        self._waveform_selected_path: Path | None = None
+        self._playback_path: Path | None = None
 
         self.audio = AudioEngine(meter_callback=self._meter_from_audio_thread)
         self.power_inhibitor = PowerInhibitor()
@@ -151,7 +185,9 @@ class MainWindow(QMainWindow):
 
         self._build_menu()
         self._build_ui()
+        self._restoring_ui = True
         self._restore_ui_state()
+        self._restoring_ui = False
         self._load_devices()
         self.refresh_take_browser()
         self._install_shortcuts()
@@ -206,7 +242,7 @@ class MainWindow(QMainWindow):
         self.menuBar().setVisible(False)
 
     def _build_ui(self) -> None:
-        """Build the v0.6.6 production-console interface.
+        """Build the v0.7.0 production-console interface.
 
         This layout intentionally follows the approved visual mockup: branded
         rail navigation, a compact production header, a large slate, calibrated
@@ -244,9 +280,9 @@ class MainWindow(QMainWindow):
             btn.setObjectName("NavButton")
             btn.setCheckable(True)
             btn.setAutoExclusive(True)
-            btn.setMinimumHeight(74)
+            btn.setFixedSize(84, 74)
             btn.clicked.connect(lambda _checked=False, i=index: self.workspace.setCurrentIndex(i))
-            nav_l.addWidget(btn)
+            nav_l.addWidget(btn, 0, Qt.AlignHCenter)
             self.nav_buttons.append(btn)
             return btn
 
@@ -435,6 +471,7 @@ class MainWindow(QMainWindow):
         for index in range(self.MAX_TRACK_ROWS):
             row = TrackRow(index, default_names[index] if index < 4 else f"INPUT {index + 1}")
             row.armedChanged.connect(self._track_arm_changed)
+            row.nameChanged.connect(self._track_name_changed)
             self.track_rows.append(row)
             self.track_layout.addWidget(row)
             row.setVisible(index < 4)
@@ -701,9 +738,18 @@ class MainWindow(QMainWindow):
         tk_head.addWidget(tk_title)
         tk_head.addStretch(1)
         tkl.addLayout(tk_head)
-        tk_sub = QLabel("Completed recordings · newest first")
+        tk_sub = QLabel("Completed recordings · select a take to review waveform, playback and metadata")
         tk_sub.setObjectName("AppSubtitle")
         tkl.addWidget(tk_sub)
+
+        takes_splitter = QSplitter(Qt.Horizontal)
+        takes_splitter.setChildrenCollapsible(False)
+        takes_splitter.setHandleWidth(8)
+
+        take_list_panel = QWidget()
+        take_list_layout = QVBoxLayout(take_list_panel)
+        take_list_layout.setContentsMargins(0, 0, 0, 0)
+        take_list_layout.setSpacing(8)
         self.take_table = QTableWidget(0, 6)
         self.take_table.setObjectName("TakeTable")
         self.take_table.setHorizontalHeaderLabels(["★", "ROLL", "SCENE", "TAKE", "DURATION", "FILE"])
@@ -717,7 +763,8 @@ class MainWindow(QMainWindow):
             header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.Stretch)
         self.take_table.itemDoubleClicked.connect(lambda _item: self.play_selected_take())
-        tkl.addWidget(self.take_table, 1)
+        self.take_table.itemSelectionChanged.connect(self._selected_take_changed)
+        take_list_layout.addWidget(self.take_table, 1)
         tbtn = QHBoxLayout()
         refresh_takes = QPushButton("Refresh")
         _button_icon(refresh_takes, "refresh")
@@ -733,7 +780,57 @@ class MainWindow(QMainWindow):
         tbtn.addWidget(play_selected)
         tbtn.addWidget(reveal)
         tbtn.addStretch(1)
-        tkl.addLayout(tbtn)
+        take_list_layout.addLayout(tbtn)
+        takes_splitter.addWidget(take_list_panel)
+
+        take_inspector = QFrame()
+        take_inspector.setObjectName("TakeInspector")
+        til = QVBoxLayout(take_inspector)
+        til.setContentsMargins(14, 12, 14, 14)
+        til.setSpacing(8)
+        inspector_head = QHBoxLayout()
+        self.take_inspector_title = QLabel("SELECT A TAKE")
+        self.take_inspector_title.setObjectName("TakeInspectorTitle")
+        inspector_head.addWidget(self.take_inspector_title)
+        inspector_head.addStretch(1)
+        self.take_inspector_meta = QLabel("—")
+        self.take_inspector_meta.setObjectName("TakeInspectorMeta")
+        inspector_head.addWidget(self.take_inspector_meta)
+        til.addLayout(inspector_head)
+
+        self.take_waveform = WaveformWidget()
+        til.addWidget(self.take_waveform, 1)
+        playback_info = QHBoxLayout()
+        self.take_playback_time = QLabel("00:00 / 00:00")
+        self.take_playback_time.setObjectName("TakePlaybackTime")
+        playback_info.addWidget(self.take_playback_time)
+        playback_info.addStretch(1)
+        stop_preview = QPushButton("Stop Playback")
+        _button_icon(stop_preview, "stop")
+        stop_preview.clicked.connect(self.stop_all)
+        playback_info.addWidget(stop_preview)
+        til.addLayout(playback_info)
+
+        notes_label = QLabel("TAKE NOTES")
+        notes_label.setObjectName("FieldLabel")
+        til.addWidget(notes_label)
+        self.selected_take_notes = QTextEdit()
+        self.selected_take_notes.setObjectName("SelectedTakeNotes")
+        self.selected_take_notes.setPlaceholderText("Add or revise notes for this completed take…")
+        self.selected_take_notes.setMaximumHeight(120)
+        til.addWidget(self.selected_take_notes)
+        save_note_row = QHBoxLayout()
+        self.save_take_notes_btn = QPushButton("Save Take Notes")
+        _button_icon(self.save_take_notes_btn, "notes")
+        self.save_take_notes_btn.setProperty("role", "primary")
+        self.save_take_notes_btn.clicked.connect(self.save_selected_take_notes)
+        self.save_take_notes_btn.setEnabled(False)
+        save_note_row.addWidget(self.save_take_notes_btn)
+        save_note_row.addStretch(1)
+        til.addLayout(save_note_row)
+        takes_splitter.addWidget(take_inspector)
+        takes_splitter.setSizes([720, 500])
+        tkl.addWidget(takes_splitter, 1)
         self.workspace.addTab(takes_page, "Takes")
 
         # NOTES WORKSPACE ==================================================
@@ -830,7 +927,7 @@ class MainWindow(QMainWindow):
         self.preroll_spin.setSingleStep(1.0)
         self.preroll_spin.setSuffix(" sec")
         self.preroll_spin.setValue(5.0)
-        fields = (("INPUT DEVICE", self.system_input_combo), ("OUTPUT DEVICE", self.output_combo), ("SAMPLE RATE", self.sample_combo), ("INPUT CHANNELS", self.channels_spin), ("BUFFER", self.buffer_combo), ("PRE-ROLL", self.preroll_spin))
+        fields = (("INPUT DEVICE", self.system_input_combo), ("OUTPUT DEVICE", self.output_combo), ("SAMPLE RATE", self.sample_combo), ("ISO TRACKS", self.channels_spin), ("BUFFER", self.buffer_combo), ("PRE-ROLL", self.preroll_spin))
         for i, (name, w) in enumerate(fields):
             lab = QLabel(name)
             lab.setObjectName("FieldLabel")
@@ -849,6 +946,70 @@ class MainWindow(QMainWindow):
         ab.addWidget(self.system_apply_audio_button)
         ab.addStretch(1)
         spl.addLayout(ab)
+
+        routing_box = QFrame()
+        routing_box.setObjectName("RoutingPanel")
+        rgl = QGridLayout(routing_box)
+        rgl.setContentsMargins(14, 12, 14, 12)
+        rgl.setHorizontalSpacing(10)
+        rgl.setVerticalSpacing(6)
+        routing_title = QLabel("ISO ROUTING & DIGITAL TRIM")
+        routing_title.setObjectName("SectionTitle")
+        rgl.addWidget(routing_title, 0, 0, 1, 4)
+        routing_help = QLabel(
+            "Route physical interface channels to ISO tracks. On a stereo device, Input 1 is Left and Input 2 is Right. "
+            "Digital trim is applied after the interface preamp/A-D converter and cannot repair hardware clipping."
+        )
+        routing_help.setObjectName("AppSubtitle")
+        routing_help.setWordWrap(True)
+        rgl.addWidget(routing_help, 1, 0, 1, 4)
+        for col, title_text in enumerate(("TRACK", "SOURCE", "RECORD TRIM", "VALUE")):
+            lab = QLabel(title_text)
+            lab.setObjectName("FieldLabel")
+            rgl.addWidget(lab, 2, col)
+        self.route_source_combos = []
+        self.route_trim_sliders = []
+        self.route_trim_labels = []
+        self.route_row_widgets = []
+        for index in range(self.MAX_TRACK_ROWS):
+            track_label = QLabel(f"{index + 1:02d}  {self.track_rows[index].track_name()}")
+            track_label.setObjectName("RoutingTrackLabel")
+            source_combo = QComboBox()
+            source_combo.setObjectName("RouteSourceCombo")
+            source_combo.setMinimumWidth(140)
+            source_combo.currentIndexChanged.connect(lambda _i, idx=index: self._track_source_changed(idx))
+            trim_slider = QSlider(Qt.Horizontal)
+            trim_slider.setObjectName("RecordTrimSlider")
+            trim_slider.setRange(-240, 240)
+            trim_slider.setSingleStep(5)
+            trim_slider.setPageStep(10)
+            trim_slider.setValue(0)
+            trim_slider.setToolTip("Digital record trim in dB. 0 dB leaves the captured sample unchanged.")
+            trim_label = QLabel("0.0 dB")
+            trim_label.setObjectName("TrimValue")
+            trim_label.setFixedWidth(64)
+            trim_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            trim_slider.valueChanged.connect(lambda value, idx=index: self._record_trim_changed(idx, value))
+            self.route_source_combos.append(source_combo)
+            self.route_trim_sliders.append(trim_slider)
+            self.route_trim_labels.append(trim_label)
+            self.route_row_widgets.append((track_label, source_combo, trim_slider, trim_label))
+            row_num = index + 3
+            rgl.addWidget(track_label, row_num, 0)
+            rgl.addWidget(source_combo, row_num, 1)
+            rgl.addWidget(trim_slider, row_num, 2)
+            rgl.addWidget(trim_label, row_num, 3)
+            for widget in (track_label, source_combo, trim_slider, trim_label):
+                widget.setVisible(index < self.channels_spin.value())
+        rgl.setColumnStretch(2, 1)
+        routing_scroll = QScrollArea()
+        routing_scroll.setObjectName("RoutingScroll")
+        routing_scroll.setWidgetResizable(True)
+        routing_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        routing_scroll.setMaximumHeight(260)
+        routing_scroll.setWidget(routing_box)
+        spl.addWidget(routing_scroll)
+
         diag_box = QFrame()
         diag_box.setObjectName("DiagnosticsPanel")
         dg = QGridLayout(diag_box)
@@ -898,7 +1059,7 @@ class MainWindow(QMainWindow):
         body_l.addWidget(footer)
 
         self._metadata_controls = [self.roll_edit, self.scene_edit, self.take_spin, self.fps_combo]
-        self._audio_controls = [self.input_combo, self.system_input_combo, self.output_combo, self.sample_combo, self.channels_spin, self.buffer_combo, self.preroll_spin, self.apply_audio_button, self.system_apply_audio_button, self.add_input_btn]
+        self._audio_controls = [self.input_combo, self.system_input_combo, self.output_combo, self.sample_combo, self.channels_spin, self.buffer_combo, self.preroll_spin, self.apply_audio_button, self.system_apply_audio_button, self.add_input_btn] + list(self.route_source_combos)
         self.roll_edit.textChanged.connect(self._update_preview)
         self.scene_edit.textChanged.connect(self._update_preview)
         self.take_spin.valueChanged.connect(self._update_preview)
@@ -942,7 +1103,7 @@ class MainWindow(QMainWindow):
         rate_text = f"{sample_rate / 1000:g} kHz"
         self.format_label.setText(f"{rate_text} · 24-bit · POLY WAV")
         if hasattr(self, "input_summary"):
-            self.input_summary.setText(f"{self.channels_spin.value()} INPUT{'S' if self.channels_spin.value() != 1 else ''} · 24-bit / {rate_text}")
+            self.input_summary.setText(f"{self.channels_spin.value()} ISO · {max(1, int(getattr(self, '_selected_device_max_inputs', self.channels_spin.value())))} HW IN · 24-bit / {rate_text}")
 
     def _update_channel_summary(self, value: int | None = None) -> None:
         count = int(value if value is not None else self.channels_spin.value())
@@ -953,7 +1114,7 @@ class MainWindow(QMainWindow):
             rate = 48000
         rate_text = f"{rate / 1000:g} kHz"
         if hasattr(self, "input_summary"):
-            self.input_summary.setText(f"{count} INPUT{'S' if count != 1 else ''} · 24-bit / {rate_text}")
+            self.input_summary.setText(f"{count} ISO · {maximum} HW IN · 24-bit / {rate_text}")
         if hasattr(self, "quick_inputs"):
             self.quick_inputs.setText(f"{count} / {maximum}")
         self._update_add_input_control()
@@ -1083,6 +1244,25 @@ class MainWindow(QMainWindow):
                     self.track_rows[index].name_edit.setText(str(name))
             except Exception:
                 pass
+        self._restored_track_sources = []
+        raw_sources = str(self.settings.value("tracks/sources", ""))
+        if raw_sources:
+            try:
+                self._restored_track_sources = [int(x) for x in json.loads(raw_sources)]
+            except Exception:
+                self._restored_track_sources = []
+        raw_trims = str(self.settings.value("tracks/record_trim_db", ""))
+        if raw_trims and hasattr(self, "route_trim_sliders"):
+            try:
+                trims = [float(x) for x in json.loads(raw_trims)]
+                for index, value in enumerate(trims[: len(self.route_trim_sliders)]):
+                    slider = self.route_trim_sliders[index]
+                    slider.blockSignals(True)
+                    slider.setValue(int(round(max(-24.0, min(24.0, value)) * 10.0)))
+                    slider.blockSignals(False)
+                    self.route_trim_labels[index].setText(f"{slider.value() / 10.0:+.1f} dB")
+            except Exception:
+                pass
         geometry = self.settings.value("window/geometry")
         if geometry:
             self.restoreGeometry(geometry)
@@ -1092,6 +1272,8 @@ class MainWindow(QMainWindow):
         self._set_track_visibility(self.channels_spin.value())
 
     def _save_settings(self) -> None:
+        if getattr(self, "_restoring_ui", False):
+            return
         self.settings.setValue("project/path", str(self.session.project_dir))
         self.settings.setValue("slate/roll", self.roll_edit.text())
         self.settings.setValue("slate/scene", self.scene_edit.text())
@@ -1103,6 +1285,8 @@ class MainWindow(QMainWindow):
         self.settings.setValue("audio/preroll", self.preroll_spin.value())
         self.settings.setValue("system/keep_awake", self.awake_check.isChecked())
         self.settings.setValue("tracks/names", json.dumps([row.track_name() for row in self.track_rows]))
+        self.settings.setValue("tracks/sources", json.dumps(self._track_sources(len(self.track_rows))))
+        self.settings.setValue("tracks/record_trim_db", json.dumps(self._record_trim_db(len(self.track_rows))))
         if hasattr(self, "input_combo") and self.input_combo.currentIndex() >= 0:
             self.settings.setValue("audio/input_name", self.input_combo.currentText())
         if hasattr(self, "output_combo") and self.output_combo.currentIndex() >= 0:
@@ -1213,12 +1397,17 @@ class MainWindow(QMainWindow):
                 self._update_channel_summary(self.channels_spin.value())
         except Exception:
             self._selected_device_max_inputs = max(1, self.channels_spin.value())
+        self._populate_route_sources()
         self._update_add_input_control()
 
     def _set_track_visibility(self, channels: int) -> None:
         channels = max(1, min(int(channels), len(self.track_rows)))
         for index, row in enumerate(self.track_rows):
             row.setVisible(index < channels)
+        if hasattr(self, "route_row_widgets"):
+            for index, widgets in enumerate(self.route_row_widgets):
+                for widget in widgets:
+                    widget.setVisible(index < channels)
         self._update_channel_summary(channels)
         self._update_preview()
 
@@ -1302,12 +1491,14 @@ class MainWindow(QMainWindow):
                 sample_rate=int(self.sample_combo.currentText()),
                 blocksize=int(self.buffer_combo.currentText()),
                 pre_roll_seconds=float(self.preroll_spin.value()),
+                track_sources=self._track_sources(self.channels_spin.value()),
+                record_trim_db=self._record_trim_db(self.channels_spin.value()),
             )
             self.audio.set_armed_channels(self._armed_states(self.audio.channels))
             self.audio.reset_counters()
             self.audio.start_monitoring()
             self._set_track_visibility(self.audio.channels)
-            self.diag_audio.setText(f"{self.audio.channels}ch / {self.audio.sample_rate // 1000}k")
+            self.diag_audio.setText(f"{self.audio.channels} ISO / {self.audio.input_channels} in / {self.audio.sample_rate // 1000}k")
             self.audio_pill.setText("AUDIO READY")
             self.audio_pill.set_tone("active")
             selected_name = self.input_combo.currentText().split("  [", 1)[0].strip()
@@ -1337,6 +1528,87 @@ class MainWindow(QMainWindow):
         count = channels if channels is not None else self.channels_spin.value()
         return [row.track_name() for row in self.track_rows[: int(count)]]
 
+    def _track_sources(self, channels: int | None = None) -> list[int]:
+        count = int(channels if channels is not None else self.channels_spin.value())
+        if not hasattr(self, "route_source_combos"):
+            return list(range(count))
+        values: list[int] = []
+        for index, combo in enumerate(self.route_source_combos[:count]):
+            data = combo.currentData()
+            values.append(int(data) if data is not None else index)
+        return values
+
+    def _record_trim_db(self, channels: int | None = None) -> list[float]:
+        count = int(channels if channels is not None else self.channels_spin.value())
+        if not hasattr(self, "route_trim_sliders"):
+            return [0.0] * count
+        return [float(slider.value()) / 10.0 for slider in self.route_trim_sliders[:count]]
+
+    def _source_label(self, source: int, maximum: int | None = None) -> str:
+        maximum = int(maximum if maximum is not None else getattr(self, "_selected_device_max_inputs", 1))
+        if maximum == 2:
+            return f"Input {source + 1} · {'L' if source == 0 else 'R'}"
+        return f"Input {source + 1}"
+
+    def _populate_route_sources(self) -> None:
+        if not hasattr(self, "route_source_combos"):
+            return
+        maximum = max(1, min(self.MAX_TRACK_ROWS, int(getattr(self, "_selected_device_max_inputs", 1))))
+        for track_index, combo in enumerate(self.route_source_combos):
+            previous = combo.currentData()
+            combo.blockSignals(True)
+            combo.clear()
+            for source in range(maximum):
+                combo.addItem(self._source_label(source, maximum), source)
+            restored = getattr(self, "_restored_track_sources", [])
+            if previous is not None and int(previous) < maximum:
+                target = int(previous)
+            elif track_index < len(restored) and int(restored[track_index]) < maximum:
+                target = max(0, int(restored[track_index]))
+            else:
+                target = min(track_index, maximum - 1)
+            found = combo.findData(target)
+            combo.setCurrentIndex(found if found >= 0 else 0)
+            combo.blockSignals(False)
+            if track_index < len(self.track_rows):
+                source_value = int(combo.currentData() or 0)
+                badge = f"IN {source_value + 1}"
+                if maximum == 2:
+                    badge += " L" if source_value == 0 else " R"
+                self.track_rows[track_index].set_source_label(badge)
+
+    def _track_name_changed(self, channel: int, name: str) -> None:
+        if hasattr(self, "route_row_widgets") and 0 <= channel < len(self.route_row_widgets):
+            self.route_row_widgets[channel][0].setText(f"{channel + 1:02d}  {name or f'INPUT {channel + 1}'}")
+        self._save_settings()
+
+    def _track_source_changed(self, channel: int) -> None:
+        if self.audio.recording:
+            return
+        if 0 <= channel < len(self.route_source_combos):
+            source = int(self.route_source_combos[channel].currentData() or 0)
+            maximum = max(1, int(getattr(self, "_selected_device_max_inputs", 1)))
+            badge = f"IN {source + 1}"
+            if maximum == 2:
+                badge += " L" if source == 0 else " R"
+            self.track_rows[channel].set_source_label(badge)
+        self._save_settings()
+        if self.audio.stream is not None:
+            # Re-open the input stream if the new route requires a different
+            # hardware channel span. This keeps L/R and multi-input routing
+            # immediately authoritative instead of waiting for a restart.
+            self.apply_audio()
+
+    def _record_trim_changed(self, channel: int, value: int) -> None:
+        if hasattr(self, "route_trim_labels") and 0 <= channel < len(self.route_trim_labels):
+            self.route_trim_labels[channel].setText(f"{float(value) / 10.0:+.1f} dB")
+        try:
+            if self.audio.stream is not None:
+                self.audio.set_record_trims_db(self._record_trim_db(self.audio.channels))
+        except Exception:
+            LOGGER.debug("Could not update live record trim", exc_info=True)
+        self._save_settings()
+
     def _track_arm_changed(self, channel: int, armed: bool) -> None:
         if self.audio.recording:
             return
@@ -1365,6 +1637,10 @@ class MainWindow(QMainWindow):
             row.set_locked(locked)
         self.next_btn.setEnabled(not locked)
         self.play_btn.setEnabled(not locked)
+        if hasattr(self, "selected_take_notes"):
+            self.selected_take_notes.setReadOnly(locked)
+        if hasattr(self, "save_take_notes_btn"):
+            self.save_take_notes_btn.setEnabled((not locked) and bool(self._selected_take_id()))
         self._update_add_input_control()
 
     def toggle_record(self) -> None:
@@ -1402,6 +1678,8 @@ class MainWindow(QMainWindow):
                 "frame_rate": self.fps_combo.currentText(),
                 "track_names": self._track_names(self.audio.channels),
                 "armed_tracks": armed,
+                "track_sources": self._track_sources(self.audio.channels),
+                "record_trim_db": self._record_trim_db(self.audio.channels),
                 "recorded_at": datetime.now().isoformat(timespec="seconds"),
                 "xrun_start": self.audio.xrun_count,
                 "drop_start": self.audio.dropped_blocks,
@@ -1450,6 +1728,8 @@ class MainWindow(QMainWindow):
                 channels=int(info.channels),
                 track_names=list(snapshot.get("track_names", self._track_names(int(info.channels)))),
                 armed_tracks=list(snapshot.get("armed_tracks", self._armed_states(int(info.channels)))),
+                track_sources=list(snapshot.get("track_sources", self._track_sources(int(info.channels)))),
+                record_trim_db=list(snapshot.get("record_trim_db", self._record_trim_db(int(info.channels)))),
                 circle=bool(self.circle_take),
                 notes=self.notes.toPlainText().strip(),
                 frame_rate=str(snapshot.get("frame_rate", self.fps_combo.currentText())),
@@ -1524,6 +1804,9 @@ class MainWindow(QMainWindow):
         try:
             output = self.output_combo.currentData()
             self.audio.play_file(path, int(output) if output is not None else None)
+            self._playback_path = path.resolve()
+            if hasattr(self, "take_waveform") and self._waveform_selected_path == self._playback_path:
+                self.take_waveform.set_position(0.0)
             self.state_pill.setText("PLAYBACK")
             self.state_pill.set_tone("neutral")
             self._set_recorder_badge("PLAYBACK", "playback")
@@ -1545,6 +1828,88 @@ class MainWindow(QMainWindow):
             return
         self._play_path(self.last_take_path)
 
+    def _selected_take_changed(self) -> None:
+        take_id = self._selected_take_id()
+        if not take_id:
+            if hasattr(self, "take_inspector_title"):
+                self.take_inspector_title.setText("SELECT A TAKE")
+                self.take_inspector_meta.setText("—")
+                self.selected_take_notes.clear()
+                self.save_take_notes_btn.setEnabled(False)
+                self.take_waveform.clear()
+                self.take_playback_time.setText("00:00 / 00:00")
+            self._waveform_request_id = ""
+            self._waveform_selected_path = None
+            return
+        try:
+            path = self.session.resolve_take_id(take_id)
+            metadata = self.session.read_take_metadata(path)
+            info = sf.info(str(path))
+        except Exception as exc:
+            self.status_text.setText(f"Could not inspect take: {exc}")
+            return
+        roll = str(metadata.get("roll", path.parent.name))
+        scene = str(metadata.get("scene", ""))
+        take_num = int(metadata.get("take", 0) or 0)
+        duration = float(metadata.get("duration_seconds", float(info.frames) / float(info.samplerate or 1)) or 0.0)
+        self.take_inspector_title.setText(f"{roll} · {scene} · T{take_num:03d}")
+        self.take_inspector_meta.setText(f"{format_duration(duration)}  ·  {int(info.channels)}ch  ·  {int(info.samplerate) / 1000:g} kHz")
+        self.selected_take_notes.blockSignals(True)
+        self.selected_take_notes.setPlainText(str(metadata.get("notes", "")))
+        self.selected_take_notes.blockSignals(False)
+        self.save_take_notes_btn.setEnabled(True)
+        self.take_playback_time.setText(f"00:00 / {format_duration(duration)}")
+        self._waveform_request_id = take_id
+        self._waveform_selected_path = path.resolve()
+        self.take_waveform.clear()
+        if self.audio.recording:
+            self.save_take_notes_btn.setEnabled(False)
+            self.status_text.setText("Take waveform and metadata edits are deferred while recording to protect disk-write performance.")
+            return
+        self.take_waveform.set_loading(True)
+        task = _WaveformTask(self.session, take_id, path)
+        task.signals.ready.connect(self._waveform_ready)
+        task.signals.failed.connect(self._waveform_failed)
+        self.waveform_pool.start(task)
+
+    def _waveform_ready(self, take_id: str, mins: object, maxs: object, duration: float) -> None:
+        if take_id != self._waveform_request_id:
+            return
+        self.take_waveform.set_waveform(list(mins), list(maxs), float(duration))
+        if self._playback_path is not None and self._waveform_selected_path == self._playback_path:
+            self.take_waveform.set_position(self.audio.playback_position_seconds)
+
+    def _waveform_failed(self, take_id: str, message: str) -> None:
+        if take_id != self._waveform_request_id:
+            return
+        self.take_waveform.clear()
+        self.status_text.setText(f"Waveform unavailable: {message}")
+
+    def save_selected_take_notes(self) -> None:
+        take_id = self._selected_take_id()
+        if not take_id:
+            return
+        try:
+            path = self.session.resolve_take_id(take_id)
+            notes = self.selected_take_notes.toPlainText().strip()
+            metadata_path = self.session.metadata_path(path)
+            if not metadata_path.exists():
+                info = sf.info(str(path))
+                fallback = TakeMetadata(
+                    file=path.name, project=self.session.project_name, roll=path.parent.name, scene="", take=0,
+                    recorded_at=datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds"),
+                    duration_seconds=float(info.frames) / float(info.samplerate or 1), sample_rate=int(info.samplerate),
+                    channels=int(info.channels), track_names=[f"Input {i + 1}" for i in range(int(info.channels))],
+                    armed_tracks=[True] * int(info.channels), notes=notes, app_version=APP_VERSION,
+                )
+                self.session.write_take_metadata(path, fallback)
+            else:
+                self.session.update_take_metadata(path, notes=notes)
+            self.status_text.setText(f"Updated notes for {path.name}.")
+            self.refresh_take_browser(select_id=take_id)
+        except Exception as exc:
+            QMessageBox.warning(self, "Take Notes", str(exc))
+
     def refresh_take_browser(self, select_id: str | None = None) -> None:
         if not hasattr(self, "take_table"):
             return
@@ -1554,6 +1919,7 @@ class MainWindow(QMainWindow):
             LOGGER.warning("Could not refresh take playlist: %s", exc)
             return
         self._update_compact_take_panel(takes)
+        self.take_table.blockSignals(True)
         self.take_table.setRowCount(len(takes))
         selected_row = -1
         for row, take in enumerate(takes):
@@ -1577,6 +1943,8 @@ class MainWindow(QMainWindow):
             self.take_table.selectRow(selected_row)
         elif takes and self.take_table.currentRow() < 0:
             self.take_table.selectRow(0)
+        self.take_table.blockSignals(False)
+        self._selected_take_changed()
 
     def _selected_take_id(self) -> str:
         if not hasattr(self, "take_table"):
@@ -1658,9 +2026,30 @@ class MainWindow(QMainWindow):
             peaks, rms_values = latest
             self.last_meter_values = list(peaks)
             self.last_rms_values = list(rms_values)
-            for index, db in enumerate(peaks[: len(self.track_rows)]):
-                rms_db = rms_values[index] if index < len(rms_values) else db
-                self.track_rows[index].set_level(float(db), float(rms_db))
+            count = int(self.channels_spin.value())
+            sources = self._track_sources(count)
+            trims = self._record_trim_db(count)
+            mapped_peaks: list[float] = []
+            mapped_rms: list[float] = []
+            for index in range(count):
+                source = sources[index] if index < len(sources) else index
+                raw_peak = peaks[source] if 0 <= source < len(peaks) else -80.0
+                raw_rms = rms_values[source] if 0 <= source < len(rms_values) else raw_peak
+                trim = trims[index] if index < len(trims) else 0.0
+                db = max(-80.0, min(6.0, float(raw_peak) + trim))
+                rms_db = max(-80.0, min(6.0, float(raw_rms) + trim))
+                mapped_peaks.append(db)
+                mapped_rms.append(rms_db)
+                self.track_rows[index].set_level(db, rms_db)
+            self.last_track_meter_values = mapped_peaks
+            self.last_track_rms_values = mapped_rms
+
+        if hasattr(self, "take_waveform") and self._waveform_selected_path is not None:
+            if self._playback_path is not None and self._playback_path == self._waveform_selected_path:
+                position = self.audio.playback_position_seconds
+                duration = self.take_waveform.duration or self.audio.playback_duration_seconds
+                self.take_waveform.set_position(position)
+                self.take_playback_time.setText(f"{format_duration(position)} / {format_duration(duration)}")
 
         if self.audio.recording:
             self.clock.setText(self._format_recorder_time(self.audio.elapsed_seconds))
@@ -1744,6 +2133,7 @@ class MainWindow(QMainWindow):
             web_root=resource_path("web"),
             take_provider=lambda: self.session.list_takes(),
             take_resolver=lambda take_id: self.session.resolve_take_id(take_id),
+            waveform_provider=lambda take_id: self.session.waveform_peaks(self.session.resolve_take_id(take_id), 900),
         )
         try:
             self.controller_server.start(port=8765)
@@ -1858,6 +2248,45 @@ class MainWindow(QMainWindow):
                 self.take_spin.setValue(int(payload["take"]))
             except (TypeError, ValueError):
                 pass
+        elif cmd == "set_trim" and "track" in payload and "db" in payload:
+            try:
+                track = int(payload["track"])
+                db = max(-24.0, min(24.0, float(payload["db"])))
+                if 0 <= track < self.channels_spin.value() and track < len(self.route_trim_sliders):
+                    self.route_trim_sliders[track].setValue(int(round(db * 10.0)))
+            except (TypeError, ValueError):
+                pass
+        elif cmd == "set_track_source" and "track" in payload and "source" in payload and not self.audio.recording:
+            try:
+                track = int(payload["track"])
+                source = int(payload["source"])
+                if 0 <= track < self.channels_spin.value() and track < len(self.route_source_combos):
+                    combo = self.route_source_combos[track]
+                    found = combo.findData(source)
+                    if found >= 0:
+                        combo.setCurrentIndex(found)
+            except (TypeError, ValueError):
+                pass
+        elif cmd == "set_take_notes" and "take_id" in payload and not self.audio.recording:
+            try:
+                take_id = str(payload.get("take_id", ""))
+                notes = str(payload.get("notes", ""))[:4000].strip()
+                path = self.session.resolve_take_id(take_id)
+                if self.session.metadata_path(path).exists():
+                    self.session.update_take_metadata(path, notes=notes)
+                else:
+                    info = sf.info(str(path))
+                    self.session.write_take_metadata(path, TakeMetadata(
+                        file=path.name, project=self.session.project_name, roll=path.parent.name, scene="", take=0,
+                        recorded_at=datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds"),
+                        duration_seconds=float(info.frames) / float(info.samplerate or 1), sample_rate=int(info.samplerate),
+                        channels=int(info.channels), track_names=[f"Input {i + 1}" for i in range(int(info.channels))],
+                        armed_tracks=[True] * int(info.channels), notes=notes, app_version=APP_VERSION,
+                    ))
+                self.refresh_take_browser(select_id=take_id)
+                self.status_text.setText(f"Remote updated notes for {path.name}.")
+            except Exception as exc:
+                self.status_text.setText(f"Remote note update failed: {exc}")
 
     def _refresh_remote_state_cache(self) -> None:
         try:
@@ -1874,6 +2303,9 @@ class MainWindow(QMainWindow):
             "recording": self.audio.recording,
             "playing": self.audio.playing,
             "elapsed": round(self.audio.elapsed_seconds, 3) if self.audio.recording else 0.0,
+            "playback_elapsed": round(self.audio.playback_position_seconds, 3) if self.audio.playing else 0.0,
+            "playback_duration": round(self.audio.playback_duration_seconds, 3) if self.audio.playing else 0.0,
+            "playback_file_id": self.session.relative_take_id(self._playback_path) if self._playback_path and self._playback_path.exists() else "",
             "roll": self.roll_edit.text(),
             "scene": self.scene_edit.text(),
             "take": self.take_spin.value(),
@@ -1883,9 +2315,13 @@ class MainWindow(QMainWindow):
             "xruns": self.audio.xrun_count,
             "dropped_blocks": self.audio.dropped_blocks,
             "writer_queue_percent": round(self.audio.writer_queue_percent, 1),
-            "meters": [round(v, 1) for v in self.last_meter_values[: self.channels_spin.value()]],
+            "meters": [round(v, 1) for v in self.last_track_meter_values[: self.channels_spin.value()]],
+            "rms_meters": [round(v, 1) for v in self.last_track_rms_values[: self.channels_spin.value()]],
             "tracks": self._track_names(self.channels_spin.value()),
             "armed": self._armed_states(self.channels_spin.value()),
+            "sources": self._track_sources(self.channels_spin.value()),
+            "trims": [round(v, 1) for v in self._record_trim_db(self.channels_spin.value())],
+            "source_count": int(getattr(self, "_selected_device_max_inputs", self.channels_spin.value())),
             "project": self.session.project_name,
             "audio_ready": self.audio.stream is not None,
             "disk_display": disk_display,

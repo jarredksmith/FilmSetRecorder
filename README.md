@@ -1,4 +1,4 @@
-# FilmSet Recorder v0.6.6
+# FilmSet Recorder v0.7.0
 
 ## New in 0.5: Production Console redesign
 
@@ -27,11 +27,11 @@ Highlights:
 
 ---
 
-# FilmSet Recorder 0.6.6
+# FilmSet Recorder 0.7.0
 
 FilmSet Recorder is a cross-platform multitrack production-dialogue recorder built for film sets. The desktop application is written in Python/PySide6 and is designed around a field-recorder workflow rather than a general-purpose DAW.
 
-> **Engineering build:** 0.6.6 is intended for development and hardware validation. Do not use it as the only recorder for irreplaceable production audio until the stress-test checklist has been completed on the exact computer, interface, storage device, and sample-rate configuration you will use on set.
+> **Engineering build:** 0.7.0 is intended for development and hardware validation. Do not use it as the only recorder for irreplaceable production audio until the stress-test checklist has been completed on the exact computer, interface, storage device, and sample-rate configuration you will use on set.
 
 
 ## New in 0.3 - Phone / tablet web remote
@@ -154,13 +154,13 @@ The repository includes:
 Open **Actions -> Build Windows Installer -> Run workflow**. After the workflow succeeds, download the artifact:
 
 ```text
-FilmSetRecorder-Windows-Installer-v0.6.6
+FilmSetRecorder-Windows-Installer-v0.7.0
 ```
 
 Inside it is:
 
 ```text
-FilmSetRecorder_Setup_0.6.6.exe
+FilmSetRecorder_Setup_0.7.0.exe
 ```
 
 The target recording PC does not need Python installed. It still needs the appropriate audio-interface driver.
@@ -173,7 +173,7 @@ The repository also includes:
 .github/workflows/build-macos.yml
 ```
 
-Run **Build macOS App**. GitHub builds both `FilmSetRecorder-macOS-v0.6.6-arm64` for Apple Silicon and `FilmSetRecorder-macOS-v0.6.6-x86_64` for Intel Macs. The generated app is ad-hoc signed for development but is not Apple Developer-ID signed or notarized, so a first-launch Gatekeeper override may be required. See `MAC_INSTALL.md`.
+Run **Build macOS App**. GitHub builds both `FilmSetRecorder-macOS-v0.7.0-arm64` for Apple Silicon and `FilmSetRecorder-macOS-v0.7.0-x86_64` for Intel Macs. The generated app is ad-hoc signed for development but is not Apple Developer-ID signed or notarized, so a first-launch Gatekeeper override may be required. See `MAC_INSTALL.md`.
 
 ## ESP32 Cheap Yellow Display remote
 
@@ -260,4 +260,4 @@ See `ROADMAP.md` for the planned progression.
 
 ## v0.6 interface
 
-Version 0.6.6 brings the Record workspace much closer to the approved console mockup: circular transport controls, larger slate values, a film-style `HH:MM:SS:FF` clock, peak + RMS ISO metering, a persistent Last Take / Take History / Notes strip, and a dynamic **Add Input** control whenever the selected interface has unused hardware channels. Automatic take-number advancement remains enabled after every successfully finalized recording. See `DESIGN_SYSTEM.md` and `RELEASE_NOTES_0.6.6.md`.
+Version 0.7.0 adds a production Take Review workflow with visual waveforms and playback playheads, editable notes on completed takes, centered navigation controls, explicit physical-input routing (including stereo Left/Right splitting), and live post-A/D digital record trim that can also be adjusted from the phone remote. The phone remains a live visual meter/control surface and can audition completed takes; low-latency live browser audio monitoring is not yet implemented. Automatic take-number advancement remains enabled after every successfully finalized recording. See `DESIGN_SYSTEM.md` and `RELEASE_NOTES_0.7.0.md`.

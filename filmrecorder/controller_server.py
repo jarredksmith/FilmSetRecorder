@@ -38,6 +38,7 @@ class ControllerServer:
         web_root: Path | None = None,
         take_provider: Callable[[], list[dict]] | None = None,
         take_resolver: Callable[[str], Path] | None = None,
+        waveform_provider: Callable[[str], dict] | None = None,
     ):
         self.command_sink = command_sink
         self.state_provider = state_provider
@@ -45,6 +46,7 @@ class ControllerServer:
         self.web_root = Path(web_root) if web_root else None
         self.take_provider = take_provider
         self.take_resolver = take_resolver
+        self.waveform_provider = waveform_provider
         self.httpd: ThreadingHTTPServer | None = None
         self.thread: threading.Thread | None = None
         self.port: int | None = None
@@ -287,6 +289,33 @@ class ControllerServer:
                         if not parent.take_resolver:
                             raise FileNotFoundError("Take resolver unavailable.")
                         return self._send_phone_audio(parent.take_resolver(take_id))
+                    except Exception as exc:
+                        return self._send_json(404, {"error": str(exc)})
+                if path == "/api/waveform":
+                    if not self._authorized():
+                        return self._send_json(401, {"error": "unauthorized", "pairing_required": True})
+                    try:
+                        take_id = parse_qs(parsed.query).get("id", [""])[0]
+                        if parent.waveform_provider:
+                            payload = parent.waveform_provider(take_id)
+                        elif parent.take_resolver:
+                            resolved = parent.take_resolver(take_id)
+                            # Fallback envelope for integrations that provide only a resolver.
+                            mins, maxs = [], []
+                            with sf.SoundFile(str(resolved), mode="r") as handle:
+                                total = int(handle.frames)
+                                step = max(1, (total + 799) // 800)
+                                while len(mins) < 800:
+                                    data = handle.read(step, dtype="float32", always_2d=True)
+                                    if not len(data):
+                                        break
+                                    mono = np.mean(data, axis=1, dtype=np.float32)
+                                    mins.append(float(np.min(mono)))
+                                    maxs.append(float(np.max(mono)))
+                                payload = {"mins": mins, "maxs": maxs, "duration_seconds": float(total) / float(handle.samplerate or 1)}
+                        else:
+                            raise FileNotFoundError("Waveform provider unavailable.")
+                        return self._send_json(200, payload)
                     except Exception as exc:
                         return self._send_json(404, {"error": str(exc)})
                 return self._serve_web(path)

@@ -29,6 +29,11 @@
         <div class="clock" id="clock">00:00:00.000</div><div class="state" id="stateLabel">READY</div>
       </section>
       <section class="meters-card" id="meters"></section>
+      <section class="mixer-card">
+        <div class="section-head"><div><div class="eyebrow">MIX / ROUTING</div><div class="section-title">ISO record trim</div></div><div class="post-adc">POST A/D</div></div>
+        <div class="mixer-note">Trim is digital after the interface preamp. If the hardware input clips, reduce the physical preamp gain.</div>
+        <div id="mixerRows" class="mixer-rows"></div>
+      </section>
       <section class="transport-card">
         <button class="record-button" id="recordButton">RECORD</button>
         <div class="transport-row"><button class="transport-button stop" id="stopButton">STOP</button><button class="transport-button" id="playButton">PLAY LAST</button></div>
@@ -42,8 +47,12 @@
           <button class="transport-button" id="playSelectedRecorder" disabled>PLAY ON RECORDER</button>
           <button class="transport-button phone" id="listenSelectedPhone" disabled>LISTEN ON PHONE</button>
         </div>
+        <div class="phone-wave-wrap"><canvas id="phoneWaveform" height="104"></canvas><div class="wave-time" id="waveTime">0:00 / 0:00</div></div>
         <audio id="phonePlayer" controls preload="none"></audio>
         <div class="now-playing" id="phoneNowPlaying">Select a take to audition it here.</div>
+        <label class="take-note-label" for="takeNotes">TAKE NOTES</label>
+        <textarea id="takeNotes" class="take-notes" rows="3" placeholder="Add notes to this completed take…"></textarea>
+        <button class="mini-button save-notes" id="saveTakeNotes" disabled>SAVE TAKE NOTES</button>
       </section>
 
       <section class="health-card"><div><span>INTERFACE</span><strong id="audioState">—</strong></div><div><span>DISK</span><strong id="diskState">—</strong></div><div><span>XRUN</span><strong id="xruns">0</strong></div><div><span>DROPS</span><strong id="drops">0</strong></div></section>

@@ -250,6 +250,111 @@ class PeakMeter(QWidget):
         painter.end()
 
 
+class WaveformWidget(QWidget):
+    """Compact production waveform with playback playhead."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._mins: list[float] = []
+        self._maxs: list[float] = []
+        self._duration = 0.0
+        self._position = 0.0
+        self._loading = False
+        self.setObjectName("WaveformWidget")
+        self.setMinimumHeight(150)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+    def clear(self) -> None:
+        self._mins = []
+        self._maxs = []
+        self._duration = 0.0
+        self._position = 0.0
+        self._loading = False
+        self.update()
+
+    def set_loading(self, loading: bool = True) -> None:
+        self._loading = bool(loading)
+        self.update()
+
+    def set_waveform(self, mins: list[float], maxs: list[float], duration: float) -> None:
+        self._mins = [float(v) for v in mins]
+        self._maxs = [float(v) for v in maxs]
+        self._duration = max(0.0, float(duration))
+        self._position = min(self._position, self._duration)
+        self._loading = False
+        self.update()
+
+    def set_position(self, seconds: float) -> None:
+        value = max(0.0, float(seconds))
+        if self._duration > 0:
+            value = min(value, self._duration)
+        if abs(value - self._position) > 0.005:
+            self._position = value
+            self.update()
+
+    @property
+    def duration(self) -> float:
+        return self._duration
+
+    @property
+    def position(self) -> float:
+        return self._position
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, False)
+        rect = QRectF(self.rect()).adjusted(1, 1, -1, -1)
+        painter.fillRect(rect, QColor("#06111B"))
+        painter.setPen(QPen(QColor("#173047"), 1))
+        painter.drawRoundedRect(rect, 7, 7)
+
+        inner = rect.adjusted(12, 12, -12, -12)
+        mid = inner.center().y()
+        painter.setPen(QPen(QColor("#183249"), 1))
+        painter.drawLine(QPointF(inner.left(), mid), QPointF(inner.right(), mid))
+        for frac in (0.25, 0.5, 0.75):
+            x = inner.left() + inner.width() * frac
+            painter.setPen(QPen(QColor("#10283C"), 1))
+            painter.drawLine(QPointF(x, inner.top()), QPointF(x, inner.bottom()))
+
+        if self._loading:
+            painter.setPen(QColor("#7E9AB5"))
+            painter.drawText(inner.toRect(), Qt.AlignCenter, "BUILDING WAVEFORM…")
+            painter.end()
+            return
+
+        count = min(len(self._mins), len(self._maxs))
+        if count <= 0:
+            painter.setPen(QColor("#657D93"))
+            painter.drawText(inner.toRect(), Qt.AlignCenter, "SELECT A TAKE TO VIEW WAVEFORM")
+            painter.end()
+            return
+
+        half = inner.height() * 0.44
+        painter.setPen(QPen(QColor("#36A8FF"), 1))
+        step = inner.width() / max(1, count - 1)
+        for i in range(count):
+            x = inner.left() + i * step
+            lo = max(-1.0, min(1.0, self._mins[i]))
+            hi = max(-1.0, min(1.0, self._maxs[i]))
+            y1 = mid - hi * half
+            y2 = mid - lo * half
+            if abs(y2 - y1) < 1.0:
+                y2 = y1 + 1.0
+            painter.drawLine(QPointF(x, y1), QPointF(x, y2))
+
+        if self._duration > 0:
+            frac = max(0.0, min(1.0, self._position / self._duration))
+            px = inner.left() + inner.width() * frac
+            painter.setPen(QPen(QColor("#FFFFFF"), 2))
+            painter.drawLine(QPointF(px, inner.top()), QPointF(px, inner.bottom()))
+            painter.setBrush(QColor("#FFFFFF"))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(QPointF(px, inner.top() + 3), 3, 3)
+
+        painter.end()
+
+
 class TrackRow(QFrame):
     armedChanged = Signal(int, bool)
     nameChanged = Signal(int, str)
@@ -303,7 +408,16 @@ class TrackRow(QFrame):
         )
         self.arm_button.toggled.connect(self._arm_state_changed)
         self._update_arm_button(True)
-        ident_l.addWidget(self.arm_button, 0, Qt.AlignLeft)
+        identity_footer = QHBoxLayout()
+        identity_footer.setContentsMargins(0, 0, 0, 0)
+        identity_footer.setSpacing(6)
+        identity_footer.addWidget(self.arm_button)
+        self.source_badge = QLabel(f"IN {channel_index + 1}")
+        self.source_badge.setObjectName("TrackSourceBadge")
+        self.source_badge.setToolTip("Physical interface input routed to this ISO track")
+        identity_footer.addWidget(self.source_badge)
+        identity_footer.addStretch(1)
+        ident_l.addLayout(identity_footer)
         row.addWidget(identity)
 
         self.meter = PeakMeter()
@@ -368,6 +482,9 @@ class TrackRow(QFrame):
         self.db_label.setText(self._format_db(db))
         self.rms_label.setText(self._format_db(rms_db))
         self.clip_label.setVisible(db >= -0.1)
+
+    def set_source_label(self, text: str) -> None:
+        self.source_badge.setText(str(text))
 
     def set_locked(self, locked: bool) -> None:
         self.arm_button.setEnabled(not locked)

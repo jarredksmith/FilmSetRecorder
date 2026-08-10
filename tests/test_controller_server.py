@@ -136,5 +136,17 @@ class ControllerServerTests(unittest.TestCase):
         self.assertIn("audio/wav", headers.get("Content-Type", ""))
 
 
+    def test_waveform_endpoint_requires_auth_and_returns_envelope(self):
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.json_request("/api/waveform?id=take.wav")
+        self.assertEqual(caught.exception.code, 401)
+        status, body, _ = self.json_request("/api/waveform?id=take.wav", token="123456")
+        self.assertEqual(status, 200)
+        self.assertIn("mins", body)
+        self.assertIn("maxs", body)
+        self.assertGreater(body.get("duration_seconds", 0), 0)
+
+
+
 if __name__ == "__main__":
     unittest.main()

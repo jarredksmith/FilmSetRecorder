@@ -45,7 +45,8 @@ class AudioEngine:
         self.stream: Optional[sd.InputStream] = None
         self.device_index: Optional[int] = None
         self.sample_rate = 48000
-        self.channels = 4
+        self.channels = 4  # recorded ISO track count
+        self.input_channels = 4  # hardware channels opened from the interface
         self.blocksize = 512
         self.pre_roll_seconds = 5.0
 
@@ -70,11 +71,16 @@ class AudioEngine:
         self._callback_state_lock = threading.Lock()
         self._armed_mask = np.ones(self.channels, dtype=bool)
         self._record_mask = np.ones(self.channels, dtype=bool)
+        self._track_sources = np.arange(self.channels, dtype=np.int32)
+        self._record_trims_db = np.zeros(self.channels, dtype=np.float32)
 
         self._play_stream: Optional[sd.OutputStream] = None
         self._play_file: Optional[sf.SoundFile] = None
         self._play_lock = threading.RLock()
         self._playing = False
+        self._play_frames_read = 0
+        self._play_total_frames = 0
+        self._play_sample_rate = 1
 
     @staticmethod
     def devices() -> list[AudioDevice]:
@@ -105,6 +111,16 @@ class AudioEngine:
     def playing(self) -> bool:
         with self._play_lock:
             return self._playing
+
+    @property
+    def playback_position_seconds(self) -> float:
+        with self._play_lock:
+            return float(self._play_frames_read) / float(self._play_sample_rate or 1)
+
+    @property
+    def playback_duration_seconds(self) -> float:
+        with self._play_lock:
+            return float(self._play_total_frames) / float(self._play_sample_rate or 1)
 
     @property
     def frames_recorded(self) -> int:
@@ -154,6 +170,8 @@ class AudioEngine:
         sample_rate: int = 48000,
         blocksize: int = 512,
         pre_roll_seconds: float = 5.0,
+        track_sources: Optional[list[int]] = None,
+        record_trim_db: Optional[list[float]] = None,
     ) -> None:
         if self.stream is not None:
             raise RuntimeError("Stop monitoring before changing audio settings.")
@@ -162,32 +180,76 @@ class AudioEngine:
         if max_in < 1:
             raise ValueError("Selected device has no input channels.")
 
-        channels = max(1, min(int(channels), max_in))
+        track_count = max(1, min(int(channels), max_in))
+        sources = list(track_sources or range(track_count))[:track_count]
+        if len(sources) < track_count:
+            sources.extend(range(len(sources), track_count))
+        sources = [max(0, min(max_in - 1, int(x))) for x in sources]
+        input_channels = max(sources) + 1 if sources else track_count
+        input_channels = max(1, min(max_in, input_channels))
         sample_rate = int(sample_rate)
         blocksize = max(64, int(blocksize))
         sd.check_input_settings(
             device=device_index,
-            channels=channels,
+            channels=input_channels,
             samplerate=sample_rate,
             dtype="float32",
         )
 
+        trims = list(record_trim_db or [0.0] * track_count)[:track_count]
+        if len(trims) < track_count:
+            trims.extend([0.0] * (track_count - len(trims)))
+        trims = [max(-24.0, min(24.0, float(x))) for x in trims]
+
         self.device_index = int(device_index)
-        self.channels = channels
+        self.channels = track_count
+        self.input_channels = input_channels
         self.sample_rate = sample_rate
         self.blocksize = blocksize
         self.pre_roll_seconds = max(0.0, min(30.0, float(pre_roll_seconds)))
         self._armed_mask = np.ones(self.channels, dtype=bool)
         self._record_mask = self._armed_mask.copy()
+        self._track_sources = np.asarray(sources, dtype=np.int32)
+        self._record_trims_db = np.asarray(trims, dtype=np.float32)
         self._resize_pre_roll()
         LOGGER.info(
-            "Configured input device=%s channels=%s sample_rate=%s blocksize=%s pre_roll=%.1f",
+            "Configured input device=%s hardware_channels=%s tracks=%s sample_rate=%s blocksize=%s pre_roll=%.1f",
             self.device_index,
+            self.input_channels,
             self.channels,
             self.sample_rate,
             self.blocksize,
             self.pre_roll_seconds,
         )
+
+    def set_track_sources(self, sources: list[int]) -> None:
+        values = list(sources[: self.channels])
+        if len(values) < self.channels:
+            values.extend(range(len(values), self.channels))
+        max_source = max(0, int(self.input_channels) - 1)
+        route = np.asarray([max(0, min(max_source, int(x))) for x in values], dtype=np.int32)
+        with self._lock:
+            if self._recording:
+                raise RuntimeError("Input routing cannot be changed while recording.")
+            self._track_sources = route
+
+    def set_record_trims_db(self, trims: list[float]) -> None:
+        values = list(trims[: self.channels])
+        if len(values) < self.channels:
+            values.extend([0.0] * (self.channels - len(values)))
+        values = [max(-24.0, min(24.0, float(x))) for x in values]
+        with self._lock:
+            self._record_trims_db = np.asarray(values, dtype=np.float32)
+
+    @property
+    def track_sources(self) -> list[int]:
+        with self._lock:
+            return [int(x) for x in self._track_sources.tolist()]
+
+    @property
+    def record_trims_db(self) -> list[float]:
+        with self._lock:
+            return [float(x) for x in self._record_trims_db.tolist()]
 
     def _resize_pre_roll(self) -> None:
         if self.blocksize <= 0 or self.sample_rate <= 0:
@@ -221,7 +283,7 @@ class AudioEngine:
         self.stream = sd.InputStream(
             device=self.device_index,
             samplerate=self.sample_rate,
-            channels=self.channels,
+            channels=self.input_channels,
             dtype="float32",
             blocksize=self.blocksize,
             callback=self._audio_callback,
@@ -311,13 +373,15 @@ class AudioEngine:
                 self._final_path = final_path
                 self._partial_path = partial_path
                 self._record_mask = self._armed_mask.copy()
+                record_sources = self._track_sources.copy()
+                start_trims = self._record_trims_db.copy()
                 self._record_started_monotonic = time.monotonic()
                 self._last_record_elapsed = 0.0
                 self._recording = True
 
         self._writer_thread = threading.Thread(
             target=self._writer_loop,
-            args=(final_path, partial_path, pre_roll_blocks, self._record_mask.copy()),
+            args=(final_path, partial_path, pre_roll_blocks, self._record_mask.copy(), record_sources, start_trims),
             name="FilmRecWriter",
             daemon=True,
         )
@@ -326,7 +390,25 @@ class AudioEngine:
         return final_path
 
     @staticmethod
+    def _process_record_block(
+        block: np.ndarray,
+        mask: np.ndarray,
+        sources: np.ndarray,
+        trims_db: np.ndarray,
+    ) -> np.ndarray:
+        if block.ndim != 2:
+            raise ValueError("Audio block must be a 2D frame/channel array.")
+        safe_sources = np.clip(sources.astype(np.int32, copy=False), 0, max(0, block.shape[1] - 1))
+        output = block[:, safe_sources].astype(np.float32, copy=True)
+        gains = np.power(10.0, trims_db.astype(np.float32, copy=False) / 20.0, dtype=np.float32)
+        output *= gains.reshape(1, -1)
+        if not bool(np.all(mask)):
+            output[:, ~mask] = 0.0
+        return output
+
+    @staticmethod
     def _apply_record_mask(block: np.ndarray, mask: np.ndarray) -> np.ndarray:
+        """Compatibility helper used by older tests/callers."""
         if bool(np.all(mask)):
             return block
         output = block.copy()
@@ -357,6 +439,8 @@ class AudioEngine:
         partial_path: Path,
         pre_roll_blocks: list[np.ndarray],
         record_mask: np.ndarray,
+        record_sources: np.ndarray,
+        start_trims: np.ndarray,
     ) -> None:
         last_flush = time.monotonic()
         error: Optional[Exception] = None
@@ -370,7 +454,7 @@ class AudioEngine:
                 subtype="PCM_24",
             ) as wav:
                 for block in pre_roll_blocks:
-                    output = self._apply_record_mask(block, record_mask)
+                    output = self._process_record_block(block, record_mask, record_sources, start_trims)
                     wav.write(output)
                     with self._lock:
                         self._frames_recorded += len(output)
@@ -381,7 +465,9 @@ class AudioEngine:
                     except queue.Empty:
                         continue
                     try:
-                        output = self._apply_record_mask(block, record_mask)
+                        with self._lock:
+                            live_trims = self._record_trims_db.copy()
+                        output = self._process_record_block(block, record_mask, record_sources, live_trims)
                         wav.write(output)
                         with self._lock:
                             self._frames_recorded += len(output)
@@ -449,6 +535,10 @@ class AudioEngine:
 
         handle = sf.SoundFile(str(path), mode="r")
         try:
+            with self._play_lock:
+                self._play_frames_read = 0
+                self._play_total_frames = int(handle.frames)
+                self._play_sample_rate = int(handle.samplerate or 1)
             device_info = sd.query_devices(output_device, "output") if output_device is not None else sd.query_devices(kind="output")
             max_out = int(device_info["max_output_channels"])
             output_channels = 2 if max_out >= 2 else 1
@@ -460,6 +550,8 @@ class AudioEngine:
                     LOGGER.warning("PortAudio playback status: %s", status)
                 data = handle.read(frames, dtype="float32", always_2d=True)
                 count = len(data)
+                with self._play_lock:
+                    self._play_frames_read = min(self._play_total_frames, self._play_frames_read + count)
                 outdata.fill(0.0)
                 if count:
                     mono = np.mean(data, axis=1, dtype=np.float32)

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0
+
+- Added centered, uniform left-rail navigation buttons.
+- Added visual waveform review with playback playhead in the desktop Takes workspace.
+- Added post-recording note editing with JSON metadata and sound-report updates.
+- Added phone waveform display and completed-take note editing.
+- Added explicit per-ISO physical input routing, including stereo L/R labeling.
+- Added live post-A/D digital record trim (-24 dB to +24 dB) and phone remote trim control.
+- Saved track source and trim metadata with each take.
+- Added routing/trim, waveform, and remote API regression tests.
+
 
 ## 0.6.6
 

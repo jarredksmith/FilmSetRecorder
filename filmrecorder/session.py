@@ -28,6 +28,8 @@ class TakeMetadata:
     channels: int
     track_names: list[str] = field(default_factory=list)
     armed_tracks: list[bool] = field(default_factory=list)
+    track_sources: list[int] = field(default_factory=list)
+    record_trim_db: list[float] = field(default_factory=list)
     circle: bool = False
     notes: str = ""
     frame_rate: str = "23.976"
@@ -42,7 +44,7 @@ class ProjectSession:
     REPORT_FIELDS = [
         "recorded_at", "roll", "scene", "take", "circle", "file",
         "duration_seconds", "sample_rate", "channels", "frame_rate",
-        "track_names", "notes", "xruns", "dropped_blocks", "recovered",
+        "track_names", "track_sources", "record_trim_db", "notes", "xruns", "dropped_blocks", "recovered",
     ]
 
     def __init__(self, project_dir: Path):
@@ -159,6 +161,9 @@ class ProjectSession:
                 "duration_seconds": float(data.get("duration_seconds", float(info.frames) / float(info.samplerate or 1)) or 0.0),
                 "sample_rate": int(data.get("sample_rate", info.samplerate) or info.samplerate),
                 "channels": int(data.get("channels", info.channels) or info.channels),
+                "track_names": list(data.get("track_names", [])) if isinstance(data.get("track_names", []), list) else [],
+                "track_sources": list(data.get("track_sources", [])) if isinstance(data.get("track_sources", []), list) else [],
+                "record_trim_db": list(data.get("record_trim_db", [])) if isinstance(data.get("record_trim_db", []), list) else [],
                 "recovered": bool(data.get("recovered", False)),
             })
 
@@ -177,11 +182,41 @@ class ProjectSession:
                 "scene": "", "take": 0, "circle": False, "notes": "",
                 "recorded_at": datetime.fromtimestamp(audio_path.stat().st_mtime).isoformat(timespec="seconds"),
                 "duration_seconds": float(info.frames) / float(info.samplerate or 1),
-                "sample_rate": int(info.samplerate), "channels": int(info.channels), "recovered": False,
+                "sample_rate": int(info.samplerate), "channels": int(info.channels), "track_names": [], "track_sources": [], "record_trim_db": [], "recovered": False,
             })
 
         items.sort(key=lambda item: str(item.get("recorded_at", "")), reverse=True)
         return items[: max(0, int(limit))] if limit is not None else items
+
+    def waveform_peaks(self, audio_path: Path, points: int = 1200) -> dict:
+        """Return a compact mono waveform envelope for UI rendering.
+
+        Audio is streamed from disk in bounded blocks so long production takes do
+        not need to be loaded into memory. The original WAV is never modified.
+        """
+        audio_path = Path(audio_path)
+        points = max(64, min(4000, int(points)))
+        with sf.SoundFile(str(audio_path), mode="r") as handle:
+            total_frames = int(handle.frames)
+            sample_rate = int(handle.samplerate or 1)
+            if total_frames <= 0:
+                return {"mins": [], "maxs": [], "duration_seconds": 0.0}
+            frames_per_point = max(1, (total_frames + points - 1) // points)
+            mins: list[float] = []
+            maxs: list[float] = []
+            while len(mins) < points:
+                data = handle.read(frames_per_point, dtype="float32", always_2d=True)
+                if not len(data):
+                    break
+                # Use a dialog-friendly mono fold-down for the visual envelope.
+                mono = data.mean(axis=1)
+                mins.append(float(mono.min()))
+                maxs.append(float(mono.max()))
+            return {
+                "mins": mins,
+                "maxs": maxs,
+                "duration_seconds": float(total_frames) / float(sample_rate),
+            }
 
     def relative_take_id(self, audio_path: Path) -> str:
         path = Path(audio_path).resolve()
@@ -224,6 +259,12 @@ class ProjectSession:
                 names = item.get("track_names", [])
                 if isinstance(names, list):
                     item["track_names"] = " | ".join(str(x) for x in names)
+                sources = item.get("track_sources", [])
+                if isinstance(sources, list):
+                    item["track_sources"] = " | ".join(str(int(x) + 1) for x in sources)
+                trims = item.get("record_trim_db", [])
+                if isinstance(trims, list):
+                    item["record_trim_db"] = " | ".join(f"{float(x):+.1f}" for x in trims)
                 item["notes"] = str(item.get("notes", "")).replace("\r", " ").replace("\n", " / ")
                 writer.writerow({field: item.get(field, "") for field in self.REPORT_FIELDS})
         os.replace(temp, self.report_path)

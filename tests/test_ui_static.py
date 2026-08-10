@@ -121,3 +121,28 @@ class MockupParityV066StaticTests(unittest.TestCase):
 
     def test_meter_has_safe_endpoint_insets(self):
         self.assertIn('self.rect().adjusted(14, 1, -8, -2)', self.widgets)
+
+class V070ReviewMixerStaticTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(__file__).resolve().parents[1]
+        self.main = (self.root / "filmrecorder" / "main_window.py").read_text(encoding="utf-8")
+        self.widgets = (self.root / "filmrecorder" / "widgets.py").read_text(encoding="utf-8")
+        self.web = (self.root / "web" / "app.js").read_text(encoding="utf-8")
+
+    def test_nav_buttons_are_uniform_and_centered(self):
+        self.assertIn('btn.setFixedSize(84, 74)', self.main)
+        self.assertIn('nav_l.addWidget(btn, 0, Qt.AlignHCenter)', self.main)
+
+    def test_take_review_has_waveform_and_post_take_notes(self):
+        self.assertIn('self.take_waveform = WaveformWidget()', self.main)
+        self.assertIn('def save_selected_take_notes', self.main)
+        self.assertIn('class WaveformWidget', self.widgets)
+        self.assertIn("/api/waveform", self.web)
+        self.assertIn("set_take_notes", self.web)
+
+    def test_iso_routing_and_record_trim_are_exposed(self):
+        self.assertIn('ISO ROUTING & DIGITAL TRIM', self.main)
+        self.assertIn('self.route_source_combos', self.main)
+        self.assertIn('self.route_trim_sliders', self.main)
+        self.assertIn("set_track_source", self.web)
+        self.assertIn("set_trim", self.web)

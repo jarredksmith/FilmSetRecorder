@@ -118,3 +118,17 @@ class SessionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class WaveformEnvelopeTests(unittest.TestCase):
+    def test_waveform_peaks_are_compact_and_preserve_duration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            session = ProjectSession(Path(temp))
+            path = Path(temp) / "wave.wav"
+            t = np.linspace(0, 1, 4800, endpoint=False, dtype=np.float32)
+            samples = np.column_stack((0.5 * np.sin(2 * np.pi * 10 * t), 0.25 * np.sin(2 * np.pi * 7 * t)))
+            sf.write(path, samples, 48000, subtype="PCM_24")
+            wave = session.waveform_peaks(path, points=128)
+            self.assertLessEqual(len(wave["mins"]), 128)
+            self.assertEqual(len(wave["mins"]), len(wave["maxs"]))
+            self.assertAlmostEqual(wave["duration_seconds"], 0.1, places=3)
+            self.assertGreater(max(wave["maxs"]), 0.1)

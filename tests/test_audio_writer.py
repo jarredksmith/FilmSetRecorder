@@ -69,3 +69,22 @@ class AudioWriterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class AudioRoutingTrimTests(unittest.TestCase):
+    def test_track_source_routing_and_digital_trim(self):
+        block = np.asarray([[0.10, 0.20], [-0.10, -0.20]], dtype=np.float32)
+        mask = np.asarray([True, True], dtype=bool)
+        sources = np.asarray([1, 0], dtype=np.int32)
+        trims = np.asarray([6.0, -6.0], dtype=np.float32)
+        output = AudioEngine._process_record_block(block, mask, sources, trims)
+        self.assertEqual(output.shape, (2, 2))
+        self.assertAlmostEqual(float(output[0, 0]), 0.20 * (10 ** (6.0 / 20.0)), places=5)
+        self.assertAlmostEqual(float(output[0, 1]), 0.10 * (10 ** (-6.0 / 20.0)), places=5)
+
+    def test_record_trim_can_update_while_recording_state_is_true(self):
+        engine = AudioEngine()
+        engine.channels = 2
+        engine._record_trims_db = np.zeros(2, dtype=np.float32)
+        engine._recording = True
+        engine.set_record_trims_db([3.0, -4.5])
+        self.assertEqual([round(x, 1) for x in engine.record_trims_db], [3.0, -4.5])
