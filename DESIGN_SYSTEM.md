@@ -1,48 +1,46 @@
-# FilmSet Recorder design system — v0.5
+# FilmSet Recorder Design System — v0.6
 
-The interface is designed as a production instrument, not a dashboard.
+## Product character
 
-## Principles
+FilmSet Recorder should read as an instrument first and an application second: calm, legible, technically credible and visually quiet while recording.
 
-1. **Recording surface first.** Roll, scene, take, file name, meters, clock and transport remain visible while operating.
-2. **Secondary controls stay secondary.** Audio setup, notes, take history, remote pairing and diagnostics live in the inspector.
-3. **Low chrome.** Flat graphite surfaces, subtle one-pixel separators, restrained corner radii and no decorative gradients.
-4. **Semantic color only.** Red means record/critical. Green means healthy. Amber means caution. Neutral blue-gray is selection/navigation.
-5. **Instrument typography.** Metadata and labels use compact UI text; clocks, filenames, addresses and dB values use monospaced numerals.
-6. **No ambiguous states.** Recording, playback, audio readiness and errors must be visually distinct without relying on animation.
-7. **No hidden critical transport.** Record and Stop remain accessible at all supported window sizes.
+## Identity
 
-## Desktop hierarchy
+The product mark is a compact vertical waveform in electric blue on a deep blue-black field. It is used for the application icon, navigation identity, Windows installer, macOS bundle and web remote.
 
-- Top bar: project, format, health.
-- Slate strip: roll, scene, take, frame rate, next filename.
-- Console: ISO tracks and dBFS meters.
-- Inspector: Audio / Notes / Takes / Remote / System.
-- Bottom transport: clock, state message, Record / Stop / Play / Next / Circle.
+## Palette
 
-## Remote hierarchy
+- Canvas: `#06101A`
+- Raised surface: `#0C1B2A`
+- Hairline / structure: `#1B344B`
+- Primary text: `#F5FAFF`
+- Secondary text: `#7F91A5`
+- Interaction blue: `#1E91FF`
+- Record red: `#E62232`
+- Healthy green: `#73E6A7`
+- Meter cyan/green/yellow/red: functional signal-state colors only
 
-- Slate and timer.
-- Live meters.
-- Large transport.
-- Take history and audition.
-- Health summary.
+## Layout rules
 
-## Visual tokens
+1. Record view always prioritizes slate, meters, clock and transport.
+2. Administrative functions live in dedicated workspaces, not permanent dashboard cards.
+3. The left rail is navigation, not decoration.
+4. Use large empty areas deliberately; do not fill space with status cards.
+5. Recording status must be obvious without flashing or animation.
 
-- App background: `#090B0D`
-- Surface: `#0D1014` / `#101318`
-- Divider: `#242A31`
-- Primary text: `#E7EAEE`
-- Muted text: `#737D88`
-- Record: `#A9262B`
-- Healthy: `#48A779`
-- Warning: `#C7923E`
-- Selection: `#25313B`
+## Typography
 
-## Interaction rules
+- UI: Inter / SF Pro Text / Segoe UI fallbacks.
+- Time, filenames and diagnostics: SF Mono / Cascadia Mono / Consolas.
+- Uppercase section labels are compact and tracked; values are larger and more immediate.
 
-- Configuration that could invalidate a take is locked while recording.
-- Meter peak/clip memory must remain readable without excessive motion.
-- Destructive or recovery actions require explicit confirmation.
-- Technical counters belong in System; the main surface should communicate simple health states.
+## Controls
+
+- Record is the only strong red control.
+- Blue is reserved for selection, navigation and primary configuration actions.
+- Buttons use short verbs and stable positions.
+- Track arm state uses green because it communicates readiness, not branding.
+
+## Metering
+
+Meters are segmented and calibrated from -60 to 0 dBFS with peak hold and clip latch. Signal colors move from cyan/green to yellow and red only as level approaches clipping.

@@ -1,4 +1,4 @@
-# FilmSet Recorder 0.5.0 - macOS install guide
+# FilmSet Recorder 0.6.0 - macOS install guide
 
 FilmSet Recorder can be built for both Apple Silicon and Intel Macs with GitHub Actions. The recording engine uses the same project/session format as Windows, while macOS audio devices are exposed through the system audio stack.
 
@@ -17,8 +17,8 @@ You can check your Mac at **Apple menu > About This Mac**.
 4. Choose **Run workflow**.
 5. The workflow builds two jobs, one for Apple Silicon and one for Intel.
 6. When the run completes, download the appropriate artifact:
-   - `FilmSetRecorder-macOS-v0.5.0-arm64`
-   - `FilmSetRecorder-macOS-v0.5.0-x86_64`
+   - `FilmSetRecorder-macOS-v0.6.0-arm64`
+   - `FilmSetRecorder-macOS-v0.6.0-x86_64`
 7. Unzip the artifact to get the `.dmg`.
 8. Open the DMG and drag **FilmSetRecorder.app** into **Applications**.
 

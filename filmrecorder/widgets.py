@@ -62,7 +62,7 @@ class PeakMeter(QWidget):
         self._peak_db = -80.0
         self._peak_time = 0.0
         self._clipped_until = 0.0
-        self.setMinimumHeight(26)
+        self.setMinimumHeight(34)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     @property
@@ -96,42 +96,49 @@ class PeakMeter(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        rect = self.rect().adjusted(0, 3, 0, -3)
-        radius = 5.0
+        rect = self.rect().adjusted(1, 4, -1, -5)
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor("#07090B"))
-        painter.drawRoundedRect(rect, radius, radius)
+        painter.setBrush(QColor("#06111B"))
+        painter.drawRoundedRect(rect, 4, 4)
 
-        level_fraction = self._fraction(self._level_db)
-        fill_width = int(rect.width() * level_fraction)
-        if fill_width > 0:
-            green_end = int(rect.width() * self._fraction(-12.0))
-            amber_end = int(rect.width() * self._fraction(-6.0))
-            painter.save()
-            painter.setClipRect(rect.x(), rect.y(), fill_width, rect.height())
-            painter.setBrush(QColor("#438E63"))
-            painter.drawRoundedRect(rect, radius, radius)
-            if fill_width > green_end:
-                painter.setBrush(QColor("#B68B3B"))
-                painter.drawRect(rect.x() + green_end, rect.y(), max(0, fill_width - green_end), rect.height())
-            if fill_width > amber_end:
-                painter.setBrush(QColor("#B63338"))
-                painter.drawRect(rect.x() + amber_end, rect.y(), max(0, fill_width - amber_end), rect.height())
-            painter.restore()
+        # Segmented meter reads as instrumentation rather than a progress bar.
+        segments = 72
+        gap = 2
+        usable = max(1, rect.width() - gap * (segments - 1))
+        seg_w = max(1, usable / segments)
+        lit = int(round(self._fraction(self._level_db) * segments))
+        for i in range(segments):
+            x = rect.x() + i * (seg_w + gap)
+            db = -60.0 + (i / max(1, segments - 1)) * 60.0
+            if i < lit:
+                if db < -18:
+                    color = QColor("#08D9C4")
+                elif db < -12:
+                    color = QColor("#38E85B")
+                elif db < -6:
+                    color = QColor("#D7E91A")
+                elif db < -3:
+                    color = QColor("#FFC928")
+                else:
+                    color = QColor("#FF4A42")
+            else:
+                color = QColor("#10263A")
+            painter.setBrush(color)
+            painter.drawRoundedRect(int(x), rect.y()+4, max(1,int(seg_w)), max(3,rect.height()-8), 1, 1)
 
         peak_x = rect.x() + int(rect.width() * self._fraction(self._peak_db))
-        painter.setPen(QPen(QColor("#D7DCE1"), 1))
-        painter.drawLine(peak_x, rect.y() + 2, peak_x, rect.bottom() - 2)
+        painter.setPen(QPen(QColor("#F7FBFF"), 2))
+        painter.drawLine(peak_x, rect.y()+2, peak_x, rect.bottom()-2)
 
         if time.monotonic() < self._clipped_until:
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor("#D63A40"))
-            painter.drawRoundedRect(rect.right() - 7, rect.y(), 7, rect.height(), 3, 3)
+            painter.setBrush(QColor("#FF3344"))
+            painter.drawRoundedRect(rect.right()-7, rect.y(), 7, rect.height(), 2, 2)
 
-        painter.setPen(QPen(QColor("#343B43"), 1))
+        painter.setPen(QPen(QColor("#42627C"), 1))
         for db in (-48, -36, -24, -18, -12, -6, -3):
             x = rect.x() + int(rect.width() * self._fraction(float(db)))
-            painter.drawLine(x, rect.bottom() - 4, x, rect.bottom())
+            painter.drawLine(x, rect.bottom()-3, x, rect.bottom())
 
 
 class TrackRow(QFrame):
@@ -142,7 +149,7 @@ class TrackRow(QFrame):
         super().__init__(parent)
         self.channel_index = channel_index
         self.setObjectName("TrackRow")
-        self.setMinimumHeight(50)
+        self.setMinimumHeight(58)
 
         row = QHBoxLayout(self)
         row.setContentsMargins(9, 6, 9, 6)
@@ -150,7 +157,10 @@ class TrackRow(QFrame):
 
         self.channel_label = QLabel(f"{channel_index + 1:02d}")
         self.channel_label.setObjectName("ChannelNumber")
-        self.channel_label.setFixedWidth(28)
+        accents = ["#168BFF", "#9A4DFF", "#11D5C5", "#FF7A22"]
+        accent = accents[channel_index % len(accents)]
+        self.channel_label.setStyleSheet(f"border-left: 4px solid {accent}; padding-left: 7px;")
+        self.channel_label.setFixedWidth(40)
         row.addWidget(self.channel_label)
 
         self.arm_button = QPushButton("ARM")
