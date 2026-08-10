@@ -30,17 +30,17 @@
       </section>
       <section class="meters-card" id="meters"></section>
       <section class="transport-card">
-        <button class="record-button" id="recordButton"><span class="record-dot"></span>RECORD</button>
-        <div class="transport-row"><button class="transport-button stop" id="stopButton">■ STOP</button><button class="transport-button" id="playButton">▶ PLAY LAST ON RECORDER</button></div>
-        <div class="transport-row"><button class="transport-button" id="nextButton">NEXT TAKE</button><button class="transport-button circle" id="circleButton" title="Mark preferred / print take">★ CIRCLE</button></div>
+        <button class="record-button" id="recordButton">RECORD</button>
+        <div class="transport-row"><button class="transport-button stop" id="stopButton">STOP</button><button class="transport-button" id="playButton">PLAY LAST</button></div>
+        <div class="transport-row"><button class="transport-button" id="nextButton">NEXT TAKE</button><button class="transport-button circle" id="circleButton" title="Mark preferred / print take">CIRCLE</button></div>
       </section>
 
       <section class="takes-card">
-        <div class="section-head"><div><div class="eyebrow">TAKE PLAYLIST</div><div class="section-title">Recorded takes</div></div><button class="mini-button" id="refreshTakes">REFRESH</button></div>
+        <div class="section-head"><div><div class="eyebrow">TAKES</div><div class="section-title">Take history</div></div><button class="mini-button" id="refreshTakes">REFRESH</button></div>
         <div id="takeList" class="take-list"><div class="empty">No completed takes yet.</div></div>
         <div class="take-actions">
-          <button class="transport-button" id="playSelectedRecorder" disabled>▶ PLAY SELECTED ON RECORDER</button>
-          <button class="transport-button phone" id="listenSelectedPhone" disabled>🔊 LISTEN ON THIS PHONE</button>
+          <button class="transport-button" id="playSelectedRecorder" disabled>PLAY ON RECORDER</button>
+          <button class="transport-button phone" id="listenSelectedPhone" disabled>LISTEN ON PHONE</button>
         </div>
         <audio id="phonePlayer" controls preload="none"></audio>
         <div class="now-playing" id="phoneNowPlaying">Select a take to audition it here.</div>
@@ -50,7 +50,7 @@
       <button class="settings-button" id="unpairButton">Disconnect this phone</button>
     </main>
   </div>
-  <div class="overlay" id="pairOverlay"><div class="pair-card"><div class="pair-logo"><span></span></div><div class="eyebrow">FILMSET RECORDER</div><h1>Pair this device</h1><p>Enter the six-digit code shown in FilmSet Recorder on the recording computer.</p><input id="pinInput" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="000000" aria-label="Pairing code" /><button id="pairButton">PAIR REMOTE</button><div class="pair-error" id="pairError"></div><div class="pair-hint">The phone and recorder must be on the same Wi-Fi network.</div></div></div>
+  <div class="overlay" id="pairOverlay"><div class="pair-card"><div class="pair-logo"><span></span></div><div class="eyebrow">FILMSET RECORDER</div><h1>Pair remote</h1><p>Enter the six-digit code shown in FilmSet Recorder on the recording computer.</p><input id="pinInput" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="000000" aria-label="Pairing code" /><button id="pairButton">PAIR</button><div class="pair-error" id="pairError"></div><div class="pair-hint">The phone and recorder must be on the same Wi-Fi network.</div></div></div>
   <div class="toast" id="toast"></div><script src="/app.js"></script>
 </body>
 </html>

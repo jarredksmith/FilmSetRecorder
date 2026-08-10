@@ -1,4 +1,19 @@
-# FilmSet Recorder v0.4.0
+# FilmSet Recorder v0.5.0
+
+## New in 0.5: Production Console redesign
+
+The desktop and phone interfaces have been rebuilt around a production-sound design system. The main recorder window now behaves like a dedicated field recorder: slate, ISO meters, time, status and transport remain visible; setup and administrative functions live in a compact inspector. The visual treatment is flatter, darker and substantially more restrained, with semantic color, monospaced instrument readouts, subtle one-pixel separators and fewer decorative cards.
+
+Highlights:
+
+- Low-chrome desktop recording console with a persistent slate / meters / transport hierarchy.
+- Compact project, format and health bar instead of large dashboard badges.
+- Professional dBFS meter reference scale and refined track strips.
+- Audio, Notes, Takes, Remote and System consolidated into an inspector.
+- Take browser restyled as a media-history view instead of a generic table panel.
+- Phone remote restyled to the same production-instrument design language.
+- `DESIGN_SYSTEM.md` documents the visual and interaction rules for future releases.
+- Existing QR pairing, take audition, recovery, Windows installer and macOS DMG workflows remain intact.
 
 ## New in 0.4: Take Playlist + Remote Audition
 
@@ -12,11 +27,11 @@
 
 ---
 
-# FilmSet Recorder 0.4.0
+# FilmSet Recorder 0.5.0
 
 FilmSet Recorder is a cross-platform multitrack production-dialogue recorder built for film sets. The desktop application is written in Python/PySide6 and is designed around a field-recorder workflow rather than a general-purpose DAW.
 
-> **Engineering build:** 0.4.0 is intended for development and hardware validation. Do not use it as the only recorder for irreplaceable production audio until the stress-test checklist has been completed on the exact computer, interface, storage device, and sample-rate configuration you will use on set.
+> **Engineering build:** 0.5.0 is intended for development and hardware validation. Do not use it as the only recorder for irreplaceable production audio until the stress-test checklist has been completed on the exact computer, interface, storage device, and sample-rate configuration you will use on set.
 
 
 ## New in 0.3 - Phone / tablet web remote
@@ -139,13 +154,13 @@ The repository includes:
 Open **Actions -> Build Windows Installer -> Run workflow**. After the workflow succeeds, download the artifact:
 
 ```text
-FilmSetRecorder-Windows-Installer-v0.4.0
+FilmSetRecorder-Windows-Installer-v0.5.0
 ```
 
 Inside it is:
 
 ```text
-FilmSetRecorder_Setup_0.4.0.exe
+FilmSetRecorder_Setup_0.5.0.exe
 ```
 
 The target recording PC does not need Python installed. It still needs the appropriate audio-interface driver.
@@ -158,7 +173,7 @@ The repository also includes:
 .github/workflows/build-macos.yml
 ```
 
-Run **Build macOS App** and download the `FilmSetRecorder-macOS-v0.4.0` artifact. The generated app is not Apple-notarized or Developer-ID signed yet, so Gatekeeper warnings are expected on development builds.
+Run **Build macOS App**. GitHub builds both `FilmSetRecorder-macOS-v0.5.0-arm64` for Apple Silicon and `FilmSetRecorder-macOS-v0.5.0-x86_64` for Intel Macs. The generated app is ad-hoc signed for development but is not Apple Developer-ID signed or notarized, so a first-launch Gatekeeper override may be required. See `MAC_INSTALL.md`.
 
 ## ESP32 Cheap Yellow Display remote
 

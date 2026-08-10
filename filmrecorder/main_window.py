@@ -165,56 +165,54 @@ class MainWindow(QMainWindow):
         help_menu.addAction(about_action)
 
     def _build_ui(self) -> None:
-        # The desktop UI is intentionally split into three zones:
-        #   1) a compact header,
-        #   2) a resizable workspace, and
-        #   3) an always-visible transport bar.
-        # Secondary controls live in tabs so a 1366x768 laptop does not
-        # require maximizing the application to reach critical controls.
+        """Build the v0.5 production-console interface.
+
+        The recording surface keeps slate, meters, timecode and transport visible
+        at all times. Configuration and administrative functions live in a
+        restrained inspector so the UI behaves like a field recorder, not a
+        settings dashboard.
+        """
         root = QWidget()
+        root.setObjectName("AppRoot")
         self.setCentralWidget(root)
         outer = QVBoxLayout(root)
-        outer.setContentsMargins(12, 10, 12, 12)
-        outer.setSpacing(10)
+        outer.setContentsMargins(14, 10, 14, 12)
+        outer.setSpacing(8)
 
-        header = QHBoxLayout()
-        header.setSpacing(8)
-        title_col = QVBoxLayout()
-        title_col.setSpacing(0)
-        self.app_title = QLabel(APP_NAME.upper())
+        # TOP BAR -----------------------------------------------------------
+        top = QHBoxLayout()
+        top.setSpacing(12)
+        brand = QVBoxLayout()
+        brand.setSpacing(0)
+        self.app_title = QLabel("FILMSET RECORDER")
         self.app_title.setObjectName("AppTitle")
         self.project_subtitle = QLabel(self.session.project_name)
         self.project_subtitle.setObjectName("AppSubtitle")
-        title_col.addWidget(self.app_title)
-        title_col.addWidget(self.project_subtitle)
-        header.addLayout(title_col)
-        header.addStretch(1)
+        brand.addWidget(self.app_title)
+        brand.addWidget(self.project_subtitle)
+        top.addLayout(brand)
+        top.addStretch(1)
+
+        self.format_label = QLabel("48 kHz  ·  24-bit  ·  POLY WAV")
+        self.format_label.setObjectName("FormatReadout")
+        top.addWidget(self.format_label)
 
         self.audio_pill = StatusPill("AUDIO OFF", "neutral")
-        self.remote_pill = StatusPill("REMOTE STARTING", "neutral")
+        self.remote_pill = StatusPill("REMOTE", "neutral")
         self.disk_pill = StatusPill("DISK --", "neutral")
         self.state_pill = StatusPill("IDLE", "neutral")
         for pill in (self.audio_pill, self.remote_pill, self.disk_pill, self.state_pill):
-            header.addWidget(pill)
-        outer.addLayout(header)
+            pill.setMinimumHeight(24)
+            top.addWidget(pill)
+        outer.addLayout(top)
 
-        self.main_splitter = QSplitter(Qt.Horizontal)
-        self.main_splitter.setChildrenCollapsible(False)
-        self.main_splitter.setHandleWidth(8)
-        outer.addWidget(self.main_splitter, 1)
-
-        # PRIMARY WORKSPACE -------------------------------------------------
-        left = QWidget()
-        left.setMinimumWidth(430)
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(10)
-        self.main_splitter.addWidget(left)
-
-        metadata_card = Card("SLATE", "Production metadata")
-        metadata_grid = QGridLayout()
-        metadata_grid.setHorizontalSpacing(8)
-        metadata_grid.setVerticalSpacing(5)
+        # SLATE STRIP -------------------------------------------------------
+        slate = Card()
+        slate.setObjectName("SlateStrip")
+        slate_grid = QGridLayout()
+        slate_grid.setContentsMargins(0, 0, 0, 0)
+        slate_grid.setHorizontalSpacing(12)
+        slate_grid.setVerticalSpacing(3)
 
         self.roll_edit = QLineEdit("A001")
         self.scene_edit = QLineEdit("1")
@@ -230,49 +228,67 @@ class MainWindow(QMainWindow):
             ("TAKE", self.take_spin, 2),
             ("FPS", self.fps_combo, 3),
         ]
-        for label_text, widget, column in fields:
-            label = QLabel(label_text)
+        for text, widget, col in fields:
+            label = QLabel(text)
             label.setObjectName("FieldLabel")
-            metadata_grid.addWidget(label, 0, column)
-            metadata_grid.addWidget(widget, 1, column)
-        metadata_grid.setColumnStretch(0, 1)
-        metadata_grid.setColumnStretch(1, 2)
-        metadata_grid.setColumnStretch(2, 1)
-        metadata_grid.setColumnStretch(3, 1)
-        metadata_card.body.addLayout(metadata_grid)
+            slate_grid.addWidget(label, 0, col)
+            widget.setMinimumHeight(34)
+            slate_grid.addWidget(widget, 1, col)
 
-        preview_grid = QGridLayout()
-        preview_grid.setHorizontalSpacing(8)
-        preview_grid.setVerticalSpacing(5)
-        preview_label = QLabel("NEXT FILE")
-        preview_label.setObjectName("FieldLabel")
+        file_label = QLabel("NEXT FILE")
+        file_label.setObjectName("FieldLabel")
         self.filename_preview = QLabel("")
-        self.filename_preview.setObjectName("TakePreview")
+        self.filename_preview.setObjectName("FilePreview")
         self.filename_preview.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        project_button = QPushButton("Choose Folder")
-        project_button.clicked.connect(self.choose_project)
-        open_button = QPushButton("Open Folder")
-        open_button.clicked.connect(self.open_project_folder)
-        preview_grid.addWidget(preview_label, 0, 0)
-        preview_grid.addWidget(self.filename_preview, 0, 1, 1, 2)
-        preview_grid.addWidget(project_button, 1, 1)
-        preview_grid.addWidget(open_button, 1, 2)
-        preview_grid.setColumnStretch(1, 1)
-        metadata_card.body.addLayout(preview_grid)
-        left_layout.addWidget(metadata_card)
+        slate_grid.addWidget(file_label, 0, 4)
+        slate_grid.addWidget(self.filename_preview, 1, 4)
+        slate_grid.setColumnStretch(0, 1)
+        slate_grid.setColumnStretch(1, 2)
+        slate_grid.setColumnStretch(2, 1)
+        slate_grid.setColumnStretch(3, 1)
+        slate_grid.setColumnStretch(4, 4)
+        slate.body.addLayout(slate_grid)
+        outer.addWidget(slate)
 
-        meters_card = Card("ISO TRACKS", "24-bit poly WAV")
+        # WORKSPACE ---------------------------------------------------------
+        self.main_splitter = QSplitter(Qt.Horizontal)
+        self.main_splitter.setChildrenCollapsible(False)
+        self.main_splitter.setHandleWidth(5)
+        outer.addWidget(self.main_splitter, 1)
+
+        # Recording console / meters.
+        console = Card()
+        console.setObjectName("ConsoleSurface")
+        console.setMinimumWidth(460)
+        console_header = QHBoxLayout()
+        console_header.setContentsMargins(0, 0, 0, 0)
+        console_title = QLabel("ISO TRACKS")
+        console_title.setObjectName("SectionTitle")
+        console_header.addWidget(console_title)
+        console_header.addStretch(1)
+        self.input_summary = QLabel("4 INPUTS")
+        self.input_summary.setObjectName("SectionMeta")
+        console_header.addWidget(self.input_summary)
+        console.body.addLayout(console_header)
+
+        scale = QLabel("      -60          -48          -36          -24       -18       -12       -6    -3   0 dBFS")
+        scale.setObjectName("MeterScale")
+        scale.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        console.body.addWidget(scale)
+
         self.track_scroll = QScrollArea()
+        self.track_scroll.setObjectName("TrackScroll")
         self.track_scroll.setWidgetResizable(True)
         self.track_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         track_container = QWidget()
+        track_container.setObjectName("TrackContainer")
         self.track_layout = QVBoxLayout(track_container)
         self.track_layout.setContentsMargins(0, 0, 0, 0)
-        self.track_layout.setSpacing(6)
-        self.track_rows: list[TrackRow] = []
-        default_names = ["Boom", "Lav A", "Lav B", "Plant"]
+        self.track_layout.setSpacing(1)
+        self.track_rows = []
+        default_names = ["BOOM", "LAV A", "LAV B", "PLANT"]
         for index in range(self.MAX_TRACK_ROWS):
-            name = default_names[index] if index < len(default_names) else f"Input {index + 1}"
+            name = default_names[index] if index < len(default_names) else f"INPUT {index + 1}"
             row = TrackRow(index, name)
             row.armedChanged.connect(self._track_arm_changed)
             self.track_rows.append(row)
@@ -280,41 +296,42 @@ class MainWindow(QMainWindow):
             row.setVisible(index < 4)
         self.track_layout.addStretch(1)
         self.track_scroll.setWidget(track_container)
-        meters_card.body.addWidget(self.track_scroll, 1)
-        left_layout.addWidget(meters_card, 1)
+        console.body.addWidget(self.track_scroll, 1)
+        self.main_splitter.addWidget(console)
 
-        # SECONDARY CONTROLS ------------------------------------------------
-        # Tabs replace the old tall right-hand stack. Each tab is independently
-        # scrollable, so every control remains reachable on smaller displays.
-        side = QWidget()
-        side.setMinimumWidth(310)
-        side_layout = QVBoxLayout(side)
-        side_layout.setContentsMargins(0, 0, 0, 0)
-        side_layout.setSpacing(0)
+        # Inspector. Secondary functions only.
+        inspector = QWidget()
+        inspector.setObjectName("Inspector")
+        inspector.setMinimumWidth(300)
+        inspector_layout = QVBoxLayout(inspector)
+        inspector_layout.setContentsMargins(0, 0, 0, 0)
+        inspector_layout.setSpacing(0)
         self.side_tabs = QTabWidget()
+        self.side_tabs.setObjectName("InspectorTabs")
         self.side_tabs.setDocumentMode(True)
-        side_layout.addWidget(self.side_tabs)
-        self.main_splitter.addWidget(side)
-        self.main_splitter.setStretchFactor(0, 3)
+        inspector_layout.addWidget(self.side_tabs)
+        self.main_splitter.addWidget(inspector)
+        self.main_splitter.setStretchFactor(0, 4)
         self.main_splitter.setStretchFactor(1, 2)
-        self.main_splitter.setSizes([760, 420])
+        self.main_splitter.setSizes([820, 390])
 
         def add_scroll_tab(title: str, card: QWidget) -> None:
             scroll = QScrollArea()
+            scroll.setObjectName("InspectorScroll")
             scroll.setWidgetResizable(True)
             scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             page = QWidget()
+            page.setObjectName("InspectorPage")
             page_layout = QVBoxLayout(page)
-            page_layout.setContentsMargins(2, 4, 2, 4)
+            page_layout.setContentsMargins(8, 10, 8, 10)
+            page_layout.setSpacing(8)
             page_layout.addWidget(card)
             page_layout.addStretch(1)
             scroll.setWidget(page)
             self.side_tabs.addTab(scroll, title)
 
-        audio_card = Card("AUDIO I/O", "Interface setup")
-        audio_grid = QGridLayout()
-        audio_grid.setHorizontalSpacing(8)
-        audio_grid.setVerticalSpacing(5)
+        # AUDIO INSPECTOR ---------------------------------------------------
+        audio_card = Card("AUDIO", "I/O AND CAPTURE")
         self.input_combo = QComboBox()
         self.output_combo = QComboBox()
         self.sample_combo = QComboBox()
@@ -339,60 +356,58 @@ class MainWindow(QMainWindow):
             ("BUFFER", self.buffer_combo),
             ("PRE-ROLL", self.preroll_spin),
         ]
-        for row_idx, (label_text, widget) in enumerate(audio_fields):
+        for label_text, widget in audio_fields:
             label = QLabel(label_text)
             label.setObjectName("FieldLabel")
-            audio_grid.addWidget(label, row_idx * 2, 0)
-            audio_grid.addWidget(widget, row_idx * 2 + 1, 0)
-        audio_card.body.addLayout(audio_grid)
+            audio_card.body.addWidget(label)
+            audio_card.body.addWidget(widget)
 
         audio_buttons = QHBoxLayout()
         refresh_button = QPushButton("Refresh")
         refresh_button.clicked.connect(self._load_devices)
-        self.apply_audio_button = QPushButton("Apply / Start Audio")
-        self.apply_audio_button.setProperty("role", "accent")
+        self.apply_audio_button = QPushButton("Start / Apply Audio")
+        self.apply_audio_button.setProperty("role", "primary")
         self.apply_audio_button.clicked.connect(self.apply_audio)
         audio_buttons.addWidget(refresh_button)
         audio_buttons.addWidget(self.apply_audio_button, 1)
         audio_card.body.addLayout(audio_buttons)
 
-        self.awake_check = QCheckBox("Keep computer awake")
-        self.awake_check.setToolTip("Prevents normal idle sleep. It does not guarantee lid-closed operation on every computer or operating system.")
+        self.awake_check = QCheckBox("Prevent computer sleep while recorder is open")
         self.awake_check.toggled.connect(self._set_power_mode)
         audio_card.body.addWidget(self.awake_check)
-
-        monitor_note = QLabel("For zero-latency headphones, use the interface's hardware Direct Monitor path.")
+        monitor_note = QLabel("Live headphone monitoring should use the interface's hardware Direct Monitor path for minimum latency.")
         monitor_note.setObjectName("Muted")
         monitor_note.setWordWrap(True)
         audio_card.body.addWidget(monitor_note)
         add_scroll_tab("Audio", audio_card)
 
-        notes_card = Card("TAKE NOTES", "Saved with every take")
+        # NOTES -------------------------------------------------------------
+        notes_card = Card("TAKE NOTES", "CURRENT TAKE")
         self.notes = QTextEdit()
-        self.notes.setPlaceholderText("Performance notes, noise, wild line, airplane, wardrobe rustle...")
-        self.notes.setMinimumHeight(220)
+        self.notes.setPlaceholderText("Performance, noise, wild line, wardrobe, aircraft, room tone…")
+        self.notes.setMinimumHeight(260)
         notes_card.body.addWidget(self.notes)
         add_scroll_tab("Notes", notes_card)
 
+        # TAKE BROWSER ------------------------------------------------------
         takes_page = QWidget()
+        takes_page.setObjectName("InspectorPage")
         takes_layout = QVBoxLayout(takes_page)
-        takes_layout.setContentsMargins(4, 6, 4, 6)
+        takes_layout.setContentsMargins(8, 10, 8, 10)
         takes_layout.setSpacing(8)
-        takes_card = Card("TAKE PLAYLIST", "Completed recordings in this project")
+        takes_card = Card("TAKES", "PROJECT HISTORY")
         self.take_table = QTableWidget(0, 6)
-        self.take_table.setHorizontalHeaderLabels(["★", "ROLL", "SCENE", "TAKE", "DURATION", "FILE"])
+        self.take_table.setObjectName("TakeTable")
+        self.take_table.setHorizontalHeaderLabels(["★", "ROLL", "SCENE", "TAKE", "DUR", "FILE"])
         self.take_table.verticalHeader().setVisible(False)
         self.take_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.take_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.take_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.take_table.setAlternatingRowColors(True)
-        self.take_table.setMinimumHeight(250)
+        self.take_table.setShowGrid(False)
+        self.take_table.setMinimumHeight(310)
         header = self.take_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        for col in range(5):
+            header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.Stretch)
         self.take_table.itemDoubleClicked.connect(lambda _item: self.play_selected_take())
         takes_card.body.addWidget(self.take_table, 1)
@@ -400,36 +415,37 @@ class MainWindow(QMainWindow):
         refresh_takes = QPushButton("Refresh")
         refresh_takes.clicked.connect(self.refresh_take_browser)
         play_selected = QPushButton("Play Selected")
-        play_selected.setProperty("role", "accent")
+        play_selected.setProperty("role", "primary")
         play_selected.clicked.connect(self.play_selected_take)
-        show_selected = QPushButton("Show Folder")
+        show_selected = QPushButton("Reveal")
         show_selected.clicked.connect(self.show_selected_take_folder)
         take_buttons.addWidget(refresh_takes)
         take_buttons.addWidget(play_selected, 1)
         take_buttons.addWidget(show_selected)
         takes_card.body.addLayout(take_buttons)
-        playlist_help = QLabel("Double-click a take to play it through the selected output. Circle takes are marked with ★.")
+        playlist_help = QLabel("★ marks a preferred/circled take. Double-click any row to audition it.")
         playlist_help.setObjectName("Muted")
         playlist_help.setWordWrap(True)
         takes_card.body.addWidget(playlist_help)
         takes_layout.addWidget(takes_card, 1)
         self.side_tabs.addTab(takes_page, "Takes")
 
-        remote_card = Card("REMOTE CONTROL", "Phone, tablet, or ESP32")
-        self.remote_url_label = QLabel("Starting remote server...")
-        self.remote_url_label.setObjectName("TakePreview")
+        # REMOTE ------------------------------------------------------------
+        remote_card = Card("REMOTE", "LOCAL CONTROL")
+        self.remote_url_label = QLabel("Starting remote server…")
+        self.remote_url_label.setObjectName("NetworkAddress")
         self.remote_url_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.remote_url_label.setWordWrap(True)
         remote_card.body.addWidget(self.remote_url_label)
         self.remote_pin_label = QLabel(f"PAIRING CODE   {self.remote_token}")
-        self.remote_pin_label.setObjectName("FieldLabel")
+        self.remote_pin_label.setObjectName("PairingCode")
         remote_card.body.addWidget(self.remote_pin_label)
-        remote_help = QLabel("Scan the QR code from a phone on the same Wi-Fi network. The six-digit code is available for manual pairing.")
+        remote_help = QLabel("Phone, tablet and ESP32 controls stay on your local network. Scan the QR code for fast pairing.")
         remote_help.setObjectName("Muted")
         remote_help.setWordWrap(True)
         remote_card.body.addWidget(remote_help)
-        qr_button = QPushButton("Show QR Code")
-        qr_button.setProperty("role", "accent")
+        qr_button = QPushButton("Show Pairing QR")
+        qr_button.setProperty("role", "primary")
         qr_button.clicked.connect(self.show_remote_qr)
         open_remote_button = QPushButton("Open Web Remote")
         open_remote_button.clicked.connect(self.open_web_remote)
@@ -437,10 +453,11 @@ class MainWindow(QMainWindow):
         remote_card.body.addWidget(open_remote_button)
         add_scroll_tab("Remote", remote_card)
 
-        diagnostic_card = Card("SYSTEM", "Recorder health")
+        # SYSTEM ------------------------------------------------------------
+        diagnostic_card = Card("SYSTEM", "RECORDER HEALTH")
         diag_grid = QGridLayout()
-        diag_grid.setHorizontalSpacing(10)
-        diag_grid.setVerticalSpacing(7)
+        diag_grid.setHorizontalSpacing(14)
+        diag_grid.setVerticalSpacing(9)
         self.diag_audio = QLabel("Not configured")
         self.diag_xruns = QLabel("0")
         self.diag_drops = QLabel("0")
@@ -450,8 +467,8 @@ class MainWindow(QMainWindow):
         diag_items = [
             ("Audio", self.diag_audio),
             ("XRUNs", self.diag_xruns),
-            ("Dropped blocks", self.diag_drops),
-            ("Writer queue", self.diag_queue),
+            ("Dropped", self.diag_drops),
+            ("Writer", self.diag_queue),
             ("Disk", self.diag_disk),
             ("Remote", self.diag_remote),
         ]
@@ -459,6 +476,7 @@ class MainWindow(QMainWindow):
             key = QLabel(name.upper())
             key.setObjectName("FieldLabel")
             diag_grid.addWidget(key, i, 0)
+            value.setObjectName("DiagnosticValue")
             value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             diag_grid.addWidget(value, i, 1)
         diagnostic_card.body.addLayout(diag_grid)
@@ -470,54 +488,48 @@ class MainWindow(QMainWindow):
         diagnostic_card.body.addWidget(save_diag_button)
         add_scroll_tab("System", diagnostic_card)
 
-        # ALWAYS-VISIBLE TRANSPORT -----------------------------------------
+        # BOTTOM TRANSPORT --------------------------------------------------
         transport_card = Card()
-        transport_card.setObjectName("TransportCard")
-        transport_root = QVBoxLayout()
-        transport_root.setSpacing(8)
-        transport_card.body.addLayout(transport_root)
+        transport_card.setObjectName("TransportBar")
+        transport = QHBoxLayout()
+        transport.setContentsMargins(0, 0, 0, 0)
+        transport.setSpacing(10)
+        transport_card.body.addLayout(transport)
 
-        info_row = QHBoxLayout()
-        info_row.setSpacing(12)
+        clock_col = QVBoxLayout()
+        clock_col.setSpacing(0)
         self.clock = QLabel("00:00:00.000")
         self.clock.setObjectName("RecordClock")
-        self.clock.setMinimumWidth(220)
-        info_row.addWidget(self.clock)
+        self.clock.setMinimumWidth(280)
+        clock_col.addWidget(self.clock)
+        self.transport_slate = QLabel("A001  ·  SC 1  ·  T001")
+        self.transport_slate.setObjectName("TransportSlate")
+        clock_col.addWidget(self.transport_slate)
+        transport.addLayout(clock_col)
 
-        clock_meta = QVBoxLayout()
-        clock_meta.setSpacing(2)
-        self.transport_slate = QLabel("A001 | 1 | T001")
-        self.transport_slate.setObjectName("TakePreview")
-        self.status_text = QLabel("Choose an input device and start audio.")
+        self.status_text = QLabel("Select an input device and start audio.")
         self.status_text.setObjectName("StatusText")
         self.status_text.setWordWrap(True)
-        clock_meta.addWidget(self.transport_slate)
-        clock_meta.addWidget(self.status_text)
-        info_row.addLayout(clock_meta, 1)
-        transport_root.addLayout(info_row)
+        self.status_text.setMinimumWidth(180)
+        transport.addWidget(self.status_text, 1)
 
-        button_grid = QGridLayout()
-        button_grid.setHorizontalSpacing(8)
-        button_grid.setVerticalSpacing(0)
-        self.record_btn = TransportButton("REC", "record")
+        self.record_btn = TransportButton("●  REC", "record")
         self.record_btn.clicked.connect(self.toggle_record)
-        self.stop_btn = TransportButton("STOP", "stop")
+        self.stop_btn = TransportButton("■  STOP", "stop")
         self.stop_btn.clicked.connect(self.stop_all)
-        self.play_btn = TransportButton("PLAY LAST", "secondary")
+        self.play_btn = TransportButton("▶  PLAY LAST", "secondary")
         self.play_btn.clicked.connect(self.play_last)
-        self.next_btn = TransportButton("NEXT TAKE", "accent")
+        self.next_btn = TransportButton("NEXT TAKE", "secondary")
         self.next_btn.clicked.connect(self.next_take)
-        self.circle_btn = TransportButton("CIRCLE", "circle")
-        self.circle_btn.setToolTip("Mark the current/last take as a preferred 'print' take for editorial. This does not change the audio.")
+        self.circle_btn = TransportButton("★  CIRCLE", "circle")
+        self.circle_btn.setToolTip("Mark the current/last take as a preferred take for editorial. Audio is unchanged.")
         self.circle_btn.setCheckable(True)
         self.circle_btn.clicked.connect(self.set_circle)
 
-        for column, button in enumerate((self.record_btn, self.stop_btn, self.play_btn, self.next_btn, self.circle_btn)):
-            button.setMinimumWidth(80)
-            button.setMinimumHeight(48)
-            button_grid.addWidget(button, 0, column)
-            button_grid.setColumnStretch(column, 1)
-        transport_root.addLayout(button_grid)
+        for button in (self.record_btn, self.stop_btn, self.play_btn, self.next_btn, self.circle_btn):
+            button.setMinimumWidth(106)
+            button.setMinimumHeight(54)
+            transport.addWidget(button)
         outer.addWidget(transport_card)
 
         self._metadata_controls = [self.roll_edit, self.scene_edit, self.take_spin, self.fps_combo]
@@ -536,6 +548,8 @@ class MainWindow(QMainWindow):
         self.take_spin.valueChanged.connect(self._update_preview)
         self.fps_combo.currentTextChanged.connect(self._save_settings)
         self.channels_spin.valueChanged.connect(self._set_track_visibility)
+        self.channels_spin.valueChanged.connect(lambda value: self.input_summary.setText(f"{value} INPUTS"))
+        self.sample_combo.currentTextChanged.connect(lambda value: self.format_label.setText(f"{int(value)//1000} kHz  ·  24-bit  ·  POLY WAV"))
         self.input_combo.currentIndexChanged.connect(self._input_device_changed)
         self._update_preview()
 

@@ -1,6 +1,24 @@
 # Changelog
 
-## 0.4.0
+## 0.5.0
+
+- Rebuilt the desktop interface as a restrained production-sound console.
+- Kept slate, meters, clock and transport visible as the primary operating surface.
+- Moved setup, notes, takes, remote and technical diagnostics into a compact inspector.
+- Added a dBFS reference scale and refined track-strip presentation.
+- Replaced dashboard-style cards/pills with flatter instrument-like surfaces and status indicators.
+- Restyled the phone/tablet remote to the same professional design language.
+- Preserved take playlist, phone audition, QR pairing, recovery and cross-platform packaging.
+
+## 0.5.0
+
+- Added first-class macOS packaging for both Apple Silicon (`arm64`) and Intel (`x86_64`) Macs.
+- Added macOS microphone and local-network privacy descriptions to the application bundle.
+- Added ad-hoc code signing and DMG packaging with an Applications shortcut.
+- Added `MAC_INSTALL.md` with build, first-launch, permission, and architecture instructions.
+- macOS and Windows continue to use the same project/session and web-remote format.
+
+## 0.5.0
 - Added desktop take playlist/browser with selected-take playback.
 - Added authenticated `/api/takes` endpoint for remote take browsing.
 - Added authenticated browser-audio endpoint that streams a stereo PCM16 downmix of a selected multichannel production WAV.
@@ -10,7 +28,7 @@
 - Circle control now explains its preferred/print-take purpose.
 
 
-## 0.4.0
+## 0.5.0
 - Fixed packaged Web Remote returning `{"error":"not found"}` at the recorder URL.
 - Web Remote assets are now compiled into the application as a fallback while still using external web files during development.
 - Added an automated regression test that starts the remote server with no web directory and verifies the UI and JavaScript are still served.
@@ -52,7 +70,7 @@
 - Basic meters and slate metadata
 - Basic HTTP ESP32 remote
 
-## 0.4.0
+## 0.5.0
 - Redesigned desktop layout for 1366x768 and other laptop-sized displays.
 - Audio, Notes, Remote, and System panels now live in scrollable tabs instead of a tall fixed sidebar.
 - Transport controls remain visible at the bottom of the window.

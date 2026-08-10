@@ -62,7 +62,7 @@ class PeakMeter(QWidget):
         self._peak_db = -80.0
         self._peak_time = 0.0
         self._clipped_until = 0.0
-        self.setMinimumHeight(24)
+        self.setMinimumHeight(26)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     @property
@@ -99,7 +99,7 @@ class PeakMeter(QWidget):
         rect = self.rect().adjusted(0, 3, 0, -3)
         radius = 5.0
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor("#0A1018"))
+        painter.setBrush(QColor("#07090B"))
         painter.drawRoundedRect(rect, radius, radius)
 
         level_fraction = self._fraction(self._level_db)
@@ -109,27 +109,27 @@ class PeakMeter(QWidget):
             amber_end = int(rect.width() * self._fraction(-6.0))
             painter.save()
             painter.setClipRect(rect.x(), rect.y(), fill_width, rect.height())
-            painter.setBrush(QColor("#38D39F"))
+            painter.setBrush(QColor("#438E63"))
             painter.drawRoundedRect(rect, radius, radius)
             if fill_width > green_end:
-                painter.setBrush(QColor("#F6C85F"))
+                painter.setBrush(QColor("#B68B3B"))
                 painter.drawRect(rect.x() + green_end, rect.y(), max(0, fill_width - green_end), rect.height())
             if fill_width > amber_end:
-                painter.setBrush(QColor("#FF5D73"))
+                painter.setBrush(QColor("#B63338"))
                 painter.drawRect(rect.x() + amber_end, rect.y(), max(0, fill_width - amber_end), rect.height())
             painter.restore()
 
         peak_x = rect.x() + int(rect.width() * self._fraction(self._peak_db))
-        painter.setPen(QPen(QColor("#E8EEF5"), 2))
+        painter.setPen(QPen(QColor("#D7DCE1"), 1))
         painter.drawLine(peak_x, rect.y() + 2, peak_x, rect.bottom() - 2)
 
         if time.monotonic() < self._clipped_until:
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor("#FF3B5C"))
+            painter.setBrush(QColor("#D63A40"))
             painter.drawRoundedRect(rect.right() - 7, rect.y(), 7, rect.height(), 3, 3)
 
-        painter.setPen(QPen(QColor("#314154"), 1))
-        for db in (-48, -24, -12, -6):
+        painter.setPen(QPen(QColor("#343B43"), 1))
+        for db in (-48, -36, -24, -18, -12, -6, -3):
             x = rect.x() + int(rect.width() * self._fraction(float(db)))
             painter.drawLine(x, rect.bottom() - 4, x, rect.bottom())
 
@@ -142,7 +142,7 @@ class TrackRow(QFrame):
         super().__init__(parent)
         self.channel_index = channel_index
         self.setObjectName("TrackRow")
-        self.setMinimumHeight(52)
+        self.setMinimumHeight(50)
 
         row = QHBoxLayout(self)
         row.setContentsMargins(9, 6, 9, 6)
@@ -164,7 +164,7 @@ class TrackRow(QFrame):
         self.name_edit = QLineEdit(name)
         self.name_edit.setObjectName("TrackName")
         self.name_edit.setMinimumWidth(92)
-        self.name_edit.setMaximumWidth(150)
+        self.name_edit.setMaximumWidth(180)
         self.name_edit.editingFinished.connect(
             lambda: self.nameChanged.emit(self.channel_index, self.name_edit.text().strip())
         )
