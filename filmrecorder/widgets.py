@@ -142,28 +142,29 @@ class TrackRow(QFrame):
         super().__init__(parent)
         self.channel_index = channel_index
         self.setObjectName("TrackRow")
-        self.setMinimumHeight(62)
+        self.setMinimumHeight(52)
 
         row = QHBoxLayout(self)
-        row.setContentsMargins(12, 8, 12, 8)
-        row.setSpacing(10)
+        row.setContentsMargins(9, 6, 9, 6)
+        row.setSpacing(7)
 
         self.channel_label = QLabel(f"{channel_index + 1:02d}")
         self.channel_label.setObjectName("ChannelNumber")
-        self.channel_label.setFixedWidth(34)
+        self.channel_label.setFixedWidth(28)
         row.addWidget(self.channel_label)
 
         self.arm_button = QPushButton("ARM")
         self.arm_button.setObjectName("ArmButton")
         self.arm_button.setCheckable(True)
         self.arm_button.setChecked(True)
-        self.arm_button.setFixedWidth(58)
+        self.arm_button.setFixedWidth(52)
         self.arm_button.toggled.connect(lambda value: self.armedChanged.emit(self.channel_index, value))
         row.addWidget(self.arm_button)
 
         self.name_edit = QLineEdit(name)
         self.name_edit.setObjectName("TrackName")
-        self.name_edit.setFixedWidth(150)
+        self.name_edit.setMinimumWidth(92)
+        self.name_edit.setMaximumWidth(150)
         self.name_edit.editingFinished.connect(
             lambda: self.nameChanged.emit(self.channel_index, self.name_edit.text().strip())
         )
@@ -175,7 +176,7 @@ class TrackRow(QFrame):
         self.db_label = QLabel("-inf")
         self.db_label.setObjectName("DbReadout")
         self.db_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.db_label.setFixedWidth(62)
+        self.db_label.setFixedWidth(54)
         row.addWidget(self.db_label)
 
         self.clip_label = QLabel("CLIP")

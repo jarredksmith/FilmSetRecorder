@@ -1,8 +1,8 @@
-# FilmSet Recorder 0.3.0
+# FilmSet Recorder 0.3.2
 
 FilmSet Recorder is a cross-platform multitrack production-dialogue recorder built for film sets. The desktop application is written in Python/PySide6 and is designed around a field-recorder workflow rather than a general-purpose DAW.
 
-> **Engineering build:** 0.3.0 is intended for development and hardware validation. Do not use it as the only recorder for irreplaceable production audio until the stress-test checklist has been completed on the exact computer, interface, storage device, and sample-rate configuration you will use on set.
+> **Engineering build:** 0.3.2 is intended for development and hardware validation. Do not use it as the only recorder for irreplaceable production audio until the stress-test checklist has been completed on the exact computer, interface, storage device, and sample-rate configuration you will use on set.
 
 
 ## New in 0.3 - Phone / tablet web remote
@@ -125,13 +125,13 @@ The repository includes:
 Open **Actions -> Build Windows Installer -> Run workflow**. After the workflow succeeds, download the artifact:
 
 ```text
-FilmSetRecorder-Windows-Installer-v0.3.0
+FilmSetRecorder-Windows-Installer-v0.3.2
 ```
 
 Inside it is:
 
 ```text
-FilmSetRecorder_Setup_0.3.0.exe
+FilmSetRecorder_Setup_0.3.2.exe
 ```
 
 The target recording PC does not need Python installed. It still needs the appropriate audio-interface driver.
@@ -144,7 +144,7 @@ The repository also includes:
 .github/workflows/build-macos.yml
 ```
 
-Run **Build macOS App** and download the `FilmSetRecorder-macOS-v0.3.0` artifact. The generated app is not Apple-notarized or Developer-ID signed yet, so Gatekeeper warnings are expected on development builds.
+Run **Build macOS App** and download the `FilmSetRecorder-macOS-v0.3.2` artifact. The generated app is not Apple-notarized or Developer-ID signed yet, so Gatekeeper warnings are expected on development builds.
 
 ## ESP32 Cheap Yellow Display remote
 

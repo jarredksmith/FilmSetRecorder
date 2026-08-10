@@ -50,4 +50,4 @@ if (-not $iscc) {
 
 Write-Host ""
 Write-Host "Build complete." -ForegroundColor Green
-Write-Host "Installer: release\FilmSetRecorder_Setup_0.3.0.exe" -ForegroundColor Green
+Write-Host "Installer: release\FilmSetRecorder_Setup_0.3.2.exe" -ForegroundColor Green

@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import unquote, urlparse
 
+from .embedded_web import EMBEDDED_WEB
+
 LOGGER = logging.getLogger("filmsetrecorder.remote")
 
 
@@ -154,21 +156,48 @@ class ControllerServer:
                 self.end_headers()
                 self.wfile.write(data)
 
+            def _send_embedded(self, relative: str) -> bool:
+                asset = EMBEDDED_WEB.get(relative)
+                if not asset:
+                    return False
+                mime, data = asset
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Length", str(len(data)))
+                if relative.endswith((".html", ".json", ".webmanifest")):
+                    self.send_header("Cache-Control", "no-cache")
+                else:
+                    self.send_header("Cache-Control", "public, max-age=3600")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.end_headers()
+                self.wfile.write(data)
+                return True
+
             def _serve_web(self, request_path: str) -> None:
-                if not parent.web_root:
-                    return self._send_json(404, {"error": "web remote unavailable"})
-                root = parent.web_root.resolve()
                 relative = "index.html" if request_path in ("", "/") else unquote(request_path.lstrip("/"))
-                candidate = (root / relative).resolve()
-                try:
-                    candidate.relative_to(root)
-                except ValueError:
+                # Reject traversal before consulting either the filesystem or embedded assets.
+                if not relative or relative.startswith(("/", "\\")) or ".." in Path(relative).parts:
                     return self._send_json(403, {"error": "forbidden"})
-                if candidate.is_dir():
-                    candidate = candidate / "index.html"
-                if not candidate.is_file():
-                    return self._send_json(404, {"error": "not found"})
-                self._send_file(candidate)
+
+                # Prefer external files during development. In packaged builds, PyInstaller
+                # may relocate data into _internal; if they are missing for any reason,
+                # the exact same UI is compiled into embedded_web.py as a guaranteed fallback.
+                if parent.web_root:
+                    root = parent.web_root.resolve()
+                    candidate = (root / relative).resolve()
+                    try:
+                        candidate.relative_to(root)
+                    except ValueError:
+                        return self._send_json(403, {"error": "forbidden"})
+                    if candidate.is_dir():
+                        candidate = candidate / "index.html"
+                    if candidate.is_file():
+                        return self._send_file(candidate)
+
+                if self._send_embedded(relative):
+                    return
+                return self._send_json(404, {"error": "not found"})
 
             def do_GET(self) -> None:
                 parsed = urlparse(self.path)

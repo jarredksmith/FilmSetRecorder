@@ -328,3 +328,48 @@ QToolTip {
     padding: 6px;
 }
 """
+
+# Responsive/laptop-density additions for v0.3.1
+APP_STYLESHEET += r"""
+QTabWidget::pane {
+    border: 1px solid #1F2C3A;
+    border-radius: 10px;
+    background: #0D141D;
+    top: -1px;
+}
+
+QTabBar::tab {
+    background: #101923;
+    color: #8192A4;
+    border: 1px solid #1F2C3A;
+    border-bottom: 0;
+    padding: 9px 13px;
+    min-width: 54px;
+    font-weight: 700;
+}
+
+QTabBar::tab:first {
+    border-top-left-radius: 8px;
+}
+
+QTabBar::tab:last {
+    border-top-right-radius: 8px;
+}
+
+QTabBar::tab:selected {
+    background: #172432;
+    color: #EAF0F6;
+    border-color: #31516A;
+}
+
+QTabBar::tab:hover:!selected {
+    background: #14202C;
+    color: #C8D3DE;
+}
+
+QFrame#TransportCard {
+    background: #0E1721;
+    border: 1px solid #2A3949;
+    border-radius: 12px;
+}
+"""

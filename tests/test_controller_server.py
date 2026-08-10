@@ -62,6 +62,26 @@ class ControllerServerTests(unittest.TestCase):
         self.assertIn(b"remote", raw)
         self.assertIn("text/html", headers.get("Content-Type", ""))
 
+
+    def test_embedded_web_fallback_without_web_root(self):
+        self.server.stop()
+        self.server = ControllerServer(
+            command_sink=self.commands.put,
+            state_provider=lambda: {"recording": False, "scene": "12A", "version": "test", "project": "Unit Test"},
+            token="123456",
+            web_root=None,
+        )
+        self.server.start(host="127.0.0.1", port=0)
+        self.base = f"http://127.0.0.1:{self.server.port}"
+        status, raw, headers = self.request("/")
+        self.assertEqual(status, 200)
+        self.assertIn(b"FILMSET RECORDER", raw)
+        self.assertIn("text/html", headers.get("Content-Type", ""))
+        status, raw, headers = self.request("/app.js")
+        self.assertEqual(status, 200)
+        self.assertIn(b"api/status", raw)
+        self.assertIn("javascript", headers.get("Content-Type", ""))
+
     def test_status_requires_token(self):
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self.json_request("/status")
