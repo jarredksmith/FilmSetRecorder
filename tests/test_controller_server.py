@@ -9,6 +9,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import numpy as np
+import soundfile as sf
+
 from filmrecorder.controller_server import ControllerServer
 
 
@@ -18,11 +21,15 @@ class ControllerServerTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         web = Path(self.temp.name)
         (web / "index.html").write_text("<html>remote</html>", encoding="utf-8")
+        self.audio_path = Path(self.temp.name) / "take.wav"
+        sf.write(self.audio_path, np.zeros((480, 4), dtype=np.float32), 48000, subtype="PCM_24")
         self.server = ControllerServer(
             command_sink=self.commands.put,
             state_provider=lambda: {"recording": False, "scene": "12A", "version": "test", "project": "Unit Test"},
             token="123456",
             web_root=web,
+            take_provider=lambda: [{"id": "take.wav", "file": "take.wav", "scene": "12A", "take": 1}],
+            take_resolver=lambda take_id: self.audio_path if take_id == "take.wav" else (_ for _ in ()).throw(FileNotFoundError()),
         )
         self.server.start(host="127.0.0.1", port=0)
         self.base = f"http://127.0.0.1:{self.server.port}"
@@ -115,6 +122,18 @@ class ControllerServerTests(unittest.TestCase):
         self.assertTrue(body["duplicate"])
         with self.assertRaises(queue.Empty):
             self.commands.get(timeout=0.1)
+
+    def test_take_list_and_phone_audio_stream_require_auth(self):
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.json_request("/api/takes")
+        self.assertEqual(caught.exception.code, 401)
+        status, body, _ = self.json_request("/api/takes", token="123456")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["takes"][0]["file"], "take.wav")
+        status, raw, headers = self.request("/api/audio?id=take.wav", token="123456")
+        self.assertEqual(status, 200)
+        self.assertEqual(raw[:4], b"RIFF")
+        self.assertIn("audio/wav", headers.get("Content-Type", ""))
 
 
 if __name__ == "__main__":

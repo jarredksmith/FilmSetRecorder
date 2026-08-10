@@ -87,6 +87,26 @@ class SessionTests(unittest.TestCase):
             self.assertIn("RECOVERED", recovered.name)
             self.assertTrue(recovered.with_suffix(".json").exists())
 
+    def test_take_playlist_and_secure_resolver(self):
+        with tempfile.TemporaryDirectory() as temp:
+            session = ProjectSession(Path(temp))
+            audio = session.allocate_take_path("A001", "12A", 2)
+            audio.parent.mkdir(parents=True, exist_ok=True)
+            sf.write(audio, np.zeros((4800, 4), dtype=np.float32), 48000, subtype="PCM_24")
+            meta = TakeMetadata(
+                file=audio.name, project=session.project_name, roll="A001", scene="12A", take=2,
+                recorded_at="2026-08-09T19:00:00", duration_seconds=0.1, sample_rate=48000, channels=4,
+                track_names=["Boom", "Lav A", "Lav B", "Plant"], armed_tracks=[True] * 4, circle=True, notes="Print take",
+            )
+            session.write_take_metadata(audio, meta)
+            takes = session.list_takes()
+            self.assertEqual(len(takes), 1)
+            self.assertEqual(takes[0]["scene"], "12A")
+            self.assertTrue(takes[0]["circle"])
+            self.assertEqual(session.resolve_take_id(takes[0]["id"]), audio.resolve())
+            with self.assertRaises((ValueError, FileNotFoundError)):
+                session.resolve_take_id("../outside.wav")
+
 
 if __name__ == "__main__":
     unittest.main()

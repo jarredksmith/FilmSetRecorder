@@ -35,6 +35,10 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QSplitter,
     QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QAbstractItemView,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -116,6 +120,7 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._restore_ui_state()
         self._load_devices()
+        self.refresh_take_browser()
         self._install_shortcuts()
         self._start_remote_server()
 
@@ -369,6 +374,47 @@ class MainWindow(QMainWindow):
         notes_card.body.addWidget(self.notes)
         add_scroll_tab("Notes", notes_card)
 
+        takes_page = QWidget()
+        takes_layout = QVBoxLayout(takes_page)
+        takes_layout.setContentsMargins(4, 6, 4, 6)
+        takes_layout.setSpacing(8)
+        takes_card = Card("TAKE PLAYLIST", "Completed recordings in this project")
+        self.take_table = QTableWidget(0, 6)
+        self.take_table.setHorizontalHeaderLabels(["★", "ROLL", "SCENE", "TAKE", "DURATION", "FILE"])
+        self.take_table.verticalHeader().setVisible(False)
+        self.take_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.take_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.take_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.take_table.setAlternatingRowColors(True)
+        self.take_table.setMinimumHeight(250)
+        header = self.take_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.Stretch)
+        self.take_table.itemDoubleClicked.connect(lambda _item: self.play_selected_take())
+        takes_card.body.addWidget(self.take_table, 1)
+        take_buttons = QHBoxLayout()
+        refresh_takes = QPushButton("Refresh")
+        refresh_takes.clicked.connect(self.refresh_take_browser)
+        play_selected = QPushButton("Play Selected")
+        play_selected.setProperty("role", "accent")
+        play_selected.clicked.connect(self.play_selected_take)
+        show_selected = QPushButton("Show Folder")
+        show_selected.clicked.connect(self.show_selected_take_folder)
+        take_buttons.addWidget(refresh_takes)
+        take_buttons.addWidget(play_selected, 1)
+        take_buttons.addWidget(show_selected)
+        takes_card.body.addLayout(take_buttons)
+        playlist_help = QLabel("Double-click a take to play it through the selected output. Circle takes are marked with ★.")
+        playlist_help.setObjectName("Muted")
+        playlist_help.setWordWrap(True)
+        takes_card.body.addWidget(playlist_help)
+        takes_layout.addWidget(takes_card, 1)
+        self.side_tabs.addTab(takes_page, "Takes")
+
         remote_card = Card("REMOTE CONTROL", "Phone, tablet, or ESP32")
         self.remote_url_label = QLabel("Starting remote server...")
         self.remote_url_label.setObjectName("TakePreview")
@@ -462,6 +508,7 @@ class MainWindow(QMainWindow):
         self.next_btn = TransportButton("NEXT TAKE", "accent")
         self.next_btn.clicked.connect(self.next_take)
         self.circle_btn = TransportButton("CIRCLE", "circle")
+        self.circle_btn.setToolTip("Mark the current/last take as a preferred 'print' take for editorial. This does not change the audio.")
         self.circle_btn.setCheckable(True)
         self.circle_btn.clicked.connect(self.set_circle)
 
@@ -654,6 +701,7 @@ class MainWindow(QMainWindow):
             self.project_subtitle.setText(self.session.project_name)
             self._save_settings()
             self._update_preview()
+            self.refresh_take_browser()
             self.status_text.setText(f"Project: {self.session.project_dir}")
             self._check_recovery()
         except Exception as exc:
@@ -859,6 +907,7 @@ class MainWindow(QMainWindow):
             )
             self.session.write_take_metadata(final_path, metadata)
             self.last_take_path = final_path
+            self.refresh_take_browser(select_id=self.session.relative_take_id(final_path))
             self._circle_targets_last = True
             self.status_text.setText(
                 f"Saved {final_path.name}  |  {format_duration(metadata.duration_seconds)}  |  XRUN {metadata.xruns}"
@@ -893,21 +942,96 @@ class MainWindow(QMainWindow):
                 self.state_pill.set_tone("ready")
                 self.status_text.setText("Playback stopped. Audio ready.")
 
-    def play_last(self) -> None:
+    def _play_path(self, path: Path) -> None:
         if self.audio.recording:
             return
-        if not self.last_take_path or not self.last_take_path.exists():
-            self.status_text.setText("No completed take is available for playback.")
+        path = Path(path)
+        if not path.exists():
+            self.status_text.setText("Selected take is no longer available.")
             return
         try:
             output = self.output_combo.currentData()
-            self.audio.play_file(self.last_take_path, int(output) if output is not None else None)
+            self.audio.play_file(path, int(output) if output is not None else None)
             self.state_pill.setText("PLAYBACK")
             self.state_pill.set_tone("neutral")
-            self.status_text.setText(f"Playing {self.last_take_path.name} as a stereo dialog mix.")
+            self.status_text.setText(f"Playing {path.name} as a stereo dialog mix.")
         except Exception as exc:
             LOGGER.exception("Playback failed")
             QMessageBox.critical(self, "Playback Error", str(exc))
+
+    def play_last(self) -> None:
+        if not self.last_take_path or not self.last_take_path.exists():
+            takes = self.session.list_takes(limit=1)
+            if takes:
+                try:
+                    self.last_take_path = self.session.resolve_take_id(takes[0]["id"])
+                except Exception:
+                    self.last_take_path = None
+        if not self.last_take_path:
+            self.status_text.setText("No completed take is available for playback.")
+            return
+        self._play_path(self.last_take_path)
+
+    def refresh_take_browser(self, select_id: str | None = None) -> None:
+        if not hasattr(self, "take_table"):
+            return
+        try:
+            takes = self.session.list_takes()
+        except Exception as exc:
+            LOGGER.warning("Could not refresh take playlist: %s", exc)
+            return
+        self.take_table.setRowCount(len(takes))
+        selected_row = -1
+        for row, take in enumerate(takes):
+            values = [
+                "★" if take.get("circle") else "",
+                str(take.get("roll", "")),
+                str(take.get("scene", "")),
+                str(take.get("take", "")),
+                format_duration(float(take.get("duration_seconds", 0.0))),
+                str(take.get("file", "")),
+            ]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setData(Qt.UserRole, take.get("id", ""))
+                if column == 0:
+                    item.setTextAlignment(Qt.AlignCenter)
+                self.take_table.setItem(row, column, item)
+            if select_id and take.get("id") == select_id:
+                selected_row = row
+        if selected_row >= 0:
+            self.take_table.selectRow(selected_row)
+        elif takes and self.take_table.currentRow() < 0:
+            self.take_table.selectRow(0)
+
+    def _selected_take_id(self) -> str:
+        if not hasattr(self, "take_table"):
+            return ""
+        row = self.take_table.currentRow()
+        if row < 0:
+            return ""
+        item = self.take_table.item(row, 0)
+        return str(item.data(Qt.UserRole) or "") if item else ""
+
+    def play_selected_take(self) -> None:
+        take_id = self._selected_take_id()
+        if not take_id:
+            self.status_text.setText("Select a take in the Takes tab first.")
+            return
+        try:
+            self._play_path(self.session.resolve_take_id(take_id))
+        except Exception as exc:
+            QMessageBox.warning(self, "Take Playback", str(exc))
+
+    def show_selected_take_folder(self) -> None:
+        take_id = self._selected_take_id()
+        if not take_id:
+            return
+        try:
+            path = self.session.resolve_take_id(take_id)
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
+        except Exception as exc:
+            QMessageBox.warning(self, "Take Folder", str(exc))
 
     def next_take(self) -> None:
         if self.audio.recording:
@@ -932,6 +1056,7 @@ class MainWindow(QMainWindow):
                 self.status_text.setText(
                     f"{self.last_take_path.name} {'marked CIRCLE' if checked else 'circle mark removed'}."
                 )
+                self.refresh_take_browser(select_id=self.session.relative_take_id(self.last_take_path))
             except Exception as exc:
                 QMessageBox.warning(self, "Metadata Update Error", str(exc))
 
@@ -1034,6 +1159,8 @@ class MainWindow(QMainWindow):
             state_provider=self.remote_state,
             token=self.remote_token,
             web_root=resource_path("web"),
+            take_provider=lambda: self.session.list_takes(),
+            take_resolver=lambda take_id: self.session.resolve_take_id(take_id),
         )
         try:
             self.controller_server.start(port=8765)
@@ -1129,6 +1256,11 @@ class MainWindow(QMainWindow):
             self.stop_all()
         elif cmd == "play":
             self.play_last()
+        elif cmd == "play_take" and not self.audio.recording:
+            try:
+                self._play_path(self.session.resolve_take_id(str(payload.get("take_id", ""))))
+            except Exception as exc:
+                self.status_text.setText(f"Remote playback failed: {exc}")
         elif cmd == "next_take":
             self.next_take()
         elif cmd in ("circle", "toggle_circle"):
@@ -1162,6 +1294,7 @@ class MainWindow(QMainWindow):
             "take": self.take_spin.value(),
             "circle": self.circle_take,
             "last_file": self.last_take_path.name if self.last_take_path else "",
+            "last_file_id": self.session.relative_take_id(self.last_take_path) if self.last_take_path and self.last_take_path.exists() else "",
             "xruns": self.audio.xrun_count,
             "dropped_blocks": self.audio.dropped_blocks,
             "writer_queue_percent": round(self.audio.writer_queue_percent, 1),

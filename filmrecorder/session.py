@@ -124,6 +124,86 @@ class ProjectSession:
                 continue
             yield path
 
+
+    def list_takes(self, limit: int | None = None) -> list[dict]:
+        """Return completed takes newest-first for desktop and remote browsers.
+
+        Each item uses a project-relative WAV path as its opaque-ish ``id``.
+        The resolver validates that id before it can be used for playback.
+        """
+        items: list[dict] = []
+        seen: set[Path] = set()
+        for meta_path in self.iter_metadata_files():
+            audio_path = meta_path.with_suffix(".wav")
+            if not audio_path.exists():
+                continue
+            try:
+                data = self.read_take_metadata(audio_path)
+                info = sf.info(str(audio_path))
+            except Exception:
+                continue
+            try:
+                rel = audio_path.resolve().relative_to(self.project_dir).as_posix()
+            except ValueError:
+                continue
+            seen.add(audio_path.resolve())
+            items.append({
+                "id": rel,
+                "file": audio_path.name,
+                "roll": str(data.get("roll", audio_path.parent.name)),
+                "scene": str(data.get("scene", "")),
+                "take": int(data.get("take", 0) or 0),
+                "circle": bool(data.get("circle", False)),
+                "notes": str(data.get("notes", "")),
+                "recorded_at": str(data.get("recorded_at", "")),
+                "duration_seconds": float(data.get("duration_seconds", float(info.frames) / float(info.samplerate or 1)) or 0.0),
+                "sample_rate": int(data.get("sample_rate", info.samplerate) or info.samplerate),
+                "channels": int(data.get("channels", info.channels) or info.channels),
+                "recovered": bool(data.get("recovered", False)),
+            })
+
+        # Include valid WAVs that predate metadata or were imported into the project.
+        for audio_path in self.project_dir.rglob("*.wav"):
+            resolved = audio_path.resolve()
+            if resolved in seen or audio_path.name.endswith(".partial.wav") or self.state_dir in audio_path.parents:
+                continue
+            try:
+                rel = resolved.relative_to(self.project_dir).as_posix()
+                info = sf.info(str(audio_path))
+            except Exception:
+                continue
+            items.append({
+                "id": rel, "file": audio_path.name, "roll": audio_path.parent.name,
+                "scene": "", "take": 0, "circle": False, "notes": "",
+                "recorded_at": datetime.fromtimestamp(audio_path.stat().st_mtime).isoformat(timespec="seconds"),
+                "duration_seconds": float(info.frames) / float(info.samplerate or 1),
+                "sample_rate": int(info.samplerate), "channels": int(info.channels), "recovered": False,
+            })
+
+        items.sort(key=lambda item: str(item.get("recorded_at", "")), reverse=True)
+        return items[: max(0, int(limit))] if limit is not None else items
+
+    def relative_take_id(self, audio_path: Path) -> str:
+        path = Path(audio_path).resolve()
+        try:
+            return path.relative_to(self.project_dir).as_posix()
+        except ValueError as exc:
+            raise ValueError("Take is outside the active project.") from exc
+
+    def resolve_take_id(self, take_id: str) -> Path:
+        """Resolve a playlist id to a completed WAV inside the project."""
+        raw = str(take_id or "").strip().replace("\\", "/")
+        if not raw or raw.startswith("/") or ".." in Path(raw).parts:
+            raise ValueError("Invalid take id.")
+        candidate = (self.project_dir / raw).resolve()
+        try:
+            candidate.relative_to(self.project_dir)
+        except ValueError as exc:
+            raise ValueError("Take is outside the active project.") from exc
+        if candidate.suffix.lower() != ".wav" or candidate.name.endswith(".partial.wav") or not candidate.is_file():
+            raise FileNotFoundError("Take audio is not available.")
+        return candidate
+
     def rebuild_sound_report(self) -> Path:
         rows: list[dict] = []
         for path in self.iter_metadata_files():

@@ -1,6 +1,16 @@
 # Changelog
 
-## 0.3.2
+## 0.4.0
+- Added desktop take playlist/browser with selected-take playback.
+- Added authenticated `/api/takes` endpoint for remote take browsing.
+- Added authenticated browser-audio endpoint that streams a stereo PCM16 downmix of a selected multichannel production WAV.
+- Added phone/tablet take playlist with separate **Play on Recorder** and **Listen on This Phone** actions.
+- Added secure project-relative take resolution to prevent path traversal.
+- Added tests for playlist discovery, take resolution, and browser audio streaming.
+- Circle control now explains its preferred/print-take purpose.
+
+
+## 0.4.0
 - Fixed packaged Web Remote returning `{"error":"not found"}` at the recorder URL.
 - Web Remote assets are now compiled into the application as a fallback while still using external web files during development.
 - Added an automated regression test that starts the remote server with no web directory and verifies the UI and JavaScript are still served.
@@ -42,7 +52,7 @@
 - Basic meters and slate metadata
 - Basic HTTP ESP32 remote
 
-## 0.3.2
+## 0.4.0
 - Redesigned desktop layout for 1366x768 and other laptop-sized displays.
 - Audio, Notes, Remote, and System panels now live in scrollable tabs instead of a tall fixed sidebar.
 - Transport controls remain visible at the bottom of the window.

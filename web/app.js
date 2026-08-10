@@ -1,209 +1,31 @@
 (() => {
   const $ = (id) => document.getElementById(id);
-  const overlay = $('pairOverlay');
-  const toast = $('toast');
-  let paired = false;
-  let busy = false;
-  let lastState = null;
-  let toastTimer = null;
-
-  function showToast(message) {
-    toast.textContent = message;
-    toast.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove('show'), 1700);
-  }
-
-  function formatClock(seconds) {
-    const ms = Math.max(0, Math.floor((Number(seconds) || 0) * 1000));
-    const h = Math.floor(ms / 3600000);
-    const m = Math.floor((ms % 3600000) / 60000);
-    const s = Math.floor((ms % 60000) / 1000);
-    const rem = ms % 1000;
-    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(rem).padStart(3,'0')}`;
-  }
-
-  function dbPercent(db) {
-    const value = Math.max(-60, Math.min(0, Number(db) || -80));
-    return ((value + 60) / 60) * 100;
-  }
-
-  function setConnection(mode, text) {
-    const pill = $('connectionPill');
-    pill.classList.remove('ready', 'offline');
-    if (mode) pill.classList.add(mode);
-    $('connectionText').textContent = text;
-  }
-
-  function buildMeters(state) {
-    const wrap = $('meters');
-    const names = state.tracks || [];
-    const meters = state.meters || [];
-    const armed = state.armed || [];
-    const count = Math.max(names.length, meters.length, 4);
-    if (wrap.children.length !== count) {
-      wrap.innerHTML = '';
-      for (let i = 0; i < count; i++) {
-        const row = document.createElement('div');
-        row.className = 'meter-row';
-        row.innerHTML = `
-          <div class="meter-name"><small>CH ${String(i+1).padStart(2,'0')}</small><b data-name></b></div>
-          <div class="meter-track"><div class="meter-fill" data-fill></div></div>
-          <div class="meter-db" data-db>−∞</div>`;
-        wrap.appendChild(row);
-      }
-    }
-    [...wrap.children].forEach((row, i) => {
-      const db = Number(meters[i] ?? -80);
-      row.querySelector('[data-name]').textContent = names[i] || `Track ${i+1}`;
-      row.querySelector('[data-fill]').style.width = `${dbPercent(db)}%`;
-      row.querySelector('[data-fill]').style.opacity = armed[i] === false ? '.25' : '1';
-      row.querySelector('[data-db]').textContent = db <= -79 ? '−∞' : `${db.toFixed(1)}`;
-    });
-  }
-
-  function render(state) {
-    lastState = state;
-    $('projectName').textContent = state.project || 'FilmSet Recorder';
-    $('roll').textContent = state.roll || '—';
-    $('scene').textContent = state.scene || '—';
-    $('take').textContent = String(state.take ?? '—').padStart(3, '0');
-    $('clock').textContent = formatClock(state.elapsed);
-    $('xruns').textContent = state.xruns ?? 0;
-    $('drops').textContent = state.dropped_blocks ?? 0;
-    $('audioState').textContent = state.audio_ready ? 'READY' : 'OFFLINE';
-    $('diskState').textContent = state.disk_display || '—';
-
-    const circle = !!state.circle;
-    $('circleButton').classList.toggle('active', circle);
-    $('circleTop').classList.toggle('active', circle);
-
-    const label = $('stateLabel');
-    label.classList.remove('recording', 'playing');
-    $('recordButton').classList.toggle('recording', !!state.recording);
-    if (state.recording) {
-      label.textContent = '● RECORDING';
-      label.classList.add('recording');
-    } else if (state.playing) {
-      label.textContent = '▶ PLAYING';
-      label.classList.add('playing');
-    } else {
-      label.textContent = state.audio_ready ? 'READY' : 'AUDIO OFFLINE';
-    }
-    buildMeters(state);
-  }
-
-  async function jsonFetch(url, options = {}) {
-    const response = await fetch(url, {
-      ...options,
-      cache: 'no-store',
-      credentials: 'same-origin',
-      headers: {'Content-Type':'application/json', ...(options.headers || {})}
-    });
-    let body = {};
-    try { body = await response.json(); } catch (_) {}
-    if (!response.ok) {
-      const error = new Error(body.error || `HTTP ${response.status}`);
-      error.status = response.status;
-      throw error;
-    }
-    return body;
-  }
-
-  async function pair() {
-    const pin = $('pinInput').value.replace(/\D/g, '').slice(0, 6);
-    $('pinInput').value = pin;
-    if (pin.length !== 6) {
-      $('pairError').textContent = 'Enter all six digits.';
-      return;
-    }
-    $('pairError').textContent = '';
-    try {
-      await jsonFetch('/api/pair', {method:'POST', body:JSON.stringify({pin})});
-      paired = true;
-      overlay.classList.add('hidden');
-      showToast('Remote paired');
-      await poll();
-    } catch (err) {
-      $('pairError').textContent = err.message || 'Pairing failed.';
-    }
-  }
-
-  async function command(command, extra = {}) {
-    if (!paired) return;
-    try {
-      await jsonFetch('/api/command', {
-        method:'POST',
-        body:JSON.stringify({command, request_id: `${Date.now()}-${Math.random()}`, ...extra})
-      });
-    } catch (err) {
-      if (err.status === 401) requirePairing();
-      else showToast(err.message || 'Command failed');
-    }
-  }
-
-  function requirePairing() {
-    paired = false;
-    overlay.classList.remove('hidden');
-    setConnection('offline', 'PAIRING');
-  }
-
-  async function poll() {
-    if (busy) return;
-    busy = true;
-    try {
-      const state = await jsonFetch('/api/status');
-      paired = true;
-      overlay.classList.add('hidden');
-      setConnection('ready', 'CONNECTED');
-      render(state);
-    } catch (err) {
-      if (err.status === 401) requirePairing();
-      else setConnection('offline', 'OFFLINE');
-    } finally {
-      busy = false;
-    }
-  }
-
-  $('pairButton').addEventListener('click', pair);
-  $('pinInput').addEventListener('keydown', e => { if (e.key === 'Enter') pair(); });
-  $('pinInput').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g,'').slice(0,6); });
-  $('recordButton').addEventListener('click', () => command('record'));
-  $('stopButton').addEventListener('click', () => command('stop'));
-  $('playButton').addEventListener('click', () => command('play'));
-  $('nextButton').addEventListener('click', () => command('next_take'));
-  $('circleButton').addEventListener('click', () => command('toggle_circle'));
-  $('circleTop').addEventListener('click', () => command('toggle_circle'));
-  $('sceneBox').addEventListener('click', () => {
-    if (!lastState || lastState.recording) return;
-    const value = prompt('Scene', lastState.scene || '');
-    if (value !== null && value.trim()) command('set_scene', {scene:value.trim()});
-  });
-  $('takeBox').addEventListener('click', () => {
-    if (!lastState || lastState.recording) return;
-    const value = prompt('Take number', lastState.take || 1);
-    const n = Number.parseInt(value, 10);
-    if (Number.isFinite(n) && n > 0) command('set_take', {take:n});
-  });
-  $('unpairButton').addEventListener('click', async () => {
-    try { await jsonFetch('/api/unpair', {method:'POST', body:'{}'}); } catch (_) {}
-    requirePairing();
-  });
-
-  // Initial probe. A QR code can provide the PIN in the URL fragment; fragments are
-  // never sent to the server, and we remove it from browser history immediately.
-  (async () => {
-    const match = window.location.hash.match(/(?:^#|&)pin=(\d{6})(?:&|$)/);
-    if (match) {
-      $('pinInput').value = match[1];
-      history.replaceState(null, '', window.location.pathname + window.location.search);
-      await pair();
-    }
-    try {
-      const info = await jsonFetch('/api/info');
-      $('projectName').textContent = info.project || 'Remote Control';
-    } catch (_) {}
-    await poll();
-  })();
-  setInterval(poll, 150);
+  const overlay = $('pairOverlay'); const toast = $('toast');
+  let paired=false, busy=false, lastState=null, toastTimer=null, takes=[], selectedTakeId='';
+  const phonePlayer=$('phonePlayer');
+  function showToast(m){ toast.textContent=m; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast.classList.remove('show'),1700); }
+  function formatClock(seconds){ const ms=Math.max(0,Math.floor((Number(seconds)||0)*1000)),h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000),s=Math.floor((ms%60000)/1000),r=ms%1000; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(r).padStart(3,'0')}`; }
+  function shortDuration(seconds){ const n=Math.max(0,Math.round(Number(seconds)||0)),m=Math.floor(n/60),s=n%60; return `${m}:${String(s).padStart(2,'0')}`; }
+  function dbPercent(db){ const v=Math.max(-60,Math.min(0,Number(db)||-80)); return ((v+60)/60)*100; }
+  function setConnection(mode,text){ const p=$('connectionPill'); p.classList.remove('ready','offline'); if(mode)p.classList.add(mode); $('connectionText').textContent=text; }
+  function buildMeters(state){ const w=$('meters'),names=state.tracks||[],meters=state.meters||[],armed=state.armed||[],count=Math.max(names.length,meters.length,4); if(w.children.length!==count){w.innerHTML='';for(let i=0;i<count;i++){const row=document.createElement('div');row.className='meter-row';row.innerHTML=`<div class="meter-name"><small>CH ${String(i+1).padStart(2,'0')}</small><b data-name></b></div><div class="meter-track"><div class="meter-fill" data-fill></div></div><div class="meter-db" data-db>−∞</div>`;w.appendChild(row);}} [...w.children].forEach((row,i)=>{const db=Number(meters[i]??-80);row.querySelector('[data-name]').textContent=names[i]||`Track ${i+1}`;row.querySelector('[data-fill]').style.width=`${dbPercent(db)}%`;row.querySelector('[data-fill]').style.opacity=armed[i]===false?'.25':'1';row.querySelector('[data-db]').textContent=db<=-79?'−∞':db.toFixed(1);}); }
+  function render(state){ lastState=state; $('projectName').textContent=state.project||'FilmSet Recorder';$('roll').textContent=state.roll||'—';$('scene').textContent=state.scene||'—';$('take').textContent=String(state.take??'—').padStart(3,'0');$('clock').textContent=formatClock(state.elapsed);$('xruns').textContent=state.xruns??0;$('drops').textContent=state.dropped_blocks??0;$('audioState').textContent=state.audio_ready?'READY':'OFFLINE';$('diskState').textContent=state.disk_display||'—'; const circle=!!state.circle;$('circleButton').classList.toggle('active',circle);$('circleTop').classList.toggle('active',circle);const label=$('stateLabel');label.classList.remove('recording','playing');$('recordButton').classList.toggle('recording',!!state.recording);if(state.recording){label.textContent='● RECORDING';label.classList.add('recording');}else if(state.playing){label.textContent='▶ PLAYING ON RECORDER';label.classList.add('playing');}else{label.textContent=state.audio_ready?'READY':'AUDIO OFFLINE';} buildMeters(state); }
+  async function jsonFetch(url,options={}){const response=await fetch(url,{...options,cache:'no-store',credentials:'same-origin',headers:{'Content-Type':'application/json',...(options.headers||{})}});let body={};try{body=await response.json();}catch(_){}if(!response.ok){const e=new Error(body.error||`HTTP ${response.status}`);e.status=response.status;throw e;}return body;}
+  async function pair(){const pin=$('pinInput').value.replace(/\D/g,'').slice(0,6);$('pinInput').value=pin;if(pin.length!==6){$('pairError').textContent='Enter all six digits.';return;}$('pairError').textContent='';try{await jsonFetch('/api/pair',{method:'POST',body:JSON.stringify({pin})});paired=true;overlay.classList.add('hidden');showToast('Remote paired');await Promise.all([poll(),loadTakes()]);}catch(e){$('pairError').textContent=e.message||'Pairing failed.';}}
+  async function command(command,extra={}){if(!paired)return;try{await jsonFetch('/api/command',{method:'POST',body:JSON.stringify({command,request_id:`${Date.now()}-${Math.random()}`,...extra})});}catch(e){if(e.status===401)requirePairing();else showToast(e.message||'Command failed');}}
+  function requirePairing(){paired=false;overlay.classList.remove('hidden');setConnection('offline','PAIRING');}
+  async function poll(){if(busy)return;busy=true;try{const state=await jsonFetch('/api/status');paired=true;overlay.classList.add('hidden');setConnection('ready','CONNECTED');render(state);}catch(e){if(e.status===401)requirePairing();else setConnection('offline','OFFLINE');}finally{busy=false;}}
+  function renderTakes(){const list=$('takeList');if(!takes.length){list.innerHTML='<div class="empty">No completed takes yet.</div>';selectedTakeId='';}else{list.innerHTML='';takes.forEach(t=>{const b=document.createElement('button');b.className='take-item'+(t.id===selectedTakeId?' selected':'');b.innerHTML=`<div class="take-star ${t.circle?'circle':''}">${t.circle?'★':'○'}</div><div class="take-main"><div class="take-title">${escapeHtml(t.roll||'')} · ${escapeHtml(t.scene||'')} · T${String(t.take||0).padStart(3,'0')}</div><div class="take-sub">${escapeHtml(t.file||'')}${t.notes?' · '+escapeHtml(t.notes):''}</div></div><div class="take-duration">${shortDuration(t.duration_seconds)}</div>`;b.addEventListener('click',()=>{selectedTakeId=t.id;renderTakes();});list.appendChild(b);});} const enabled=!!selectedTakeId;$('playSelectedRecorder').disabled=!enabled;$('listenSelectedPhone').disabled=!enabled;}
+  function escapeHtml(v){const d=document.createElement('div');d.textContent=String(v??'');return d.innerHTML;}
+  async function loadTakes(){if(!paired)return;try{const data=await jsonFetch('/api/takes');const old=selectedTakeId;takes=data.takes||[];if(old&&takes.some(t=>t.id===old))selectedTakeId=old;else if(takes.length)selectedTakeId=takes[0].id;renderTakes();}catch(e){if(e.status===401)requirePairing();}}
+  function selectedTake(){return takes.find(t=>t.id===selectedTakeId);}
+  async function listenOnPhone(){const t=selectedTake();if(!t)return;phonePlayer.pause();phonePlayer.src=`/api/audio?id=${encodeURIComponent(t.id)}&v=${Date.now()}`;$('phoneNowPlaying').textContent=`Loading ${t.file}…`;try{await phonePlayer.play();$('phoneNowPlaying').textContent=`Listening on phone: ${t.file}`;}catch(_){$('phoneNowPlaying').textContent=`Tap the audio play control for ${t.file}`;}}
+  $('pairButton').addEventListener('click',pair);$('pinInput').addEventListener('keydown',e=>{if(e.key==='Enter')pair();});$('pinInput').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,6);});
+  $('recordButton').addEventListener('click',()=>command('record'));$('stopButton').addEventListener('click',()=>command('stop'));$('playButton').addEventListener('click',()=>command('play'));$('nextButton').addEventListener('click',()=>command('next_take'));$('circleButton').addEventListener('click',()=>command('toggle_circle'));$('circleTop').addEventListener('click',()=>command('toggle_circle'));
+  $('refreshTakes').addEventListener('click',loadTakes);$('playSelectedRecorder').addEventListener('click',()=>{if(selectedTakeId)command('play_take',{take_id:selectedTakeId});});$('listenSelectedPhone').addEventListener('click',listenOnPhone);
+  $('sceneBox').addEventListener('click',()=>{if(!lastState||lastState.recording)return;const v=prompt('Scene',lastState.scene||'');if(v!==null&&v.trim())command('set_scene',{scene:v.trim()});});$('takeBox').addEventListener('click',()=>{if(!lastState||lastState.recording)return;const v=prompt('Take number',lastState.take||1),n=Number.parseInt(v,10);if(Number.isFinite(n)&&n>0)command('set_take',{take:n});});
+  $('unpairButton').addEventListener('click',async()=>{try{await jsonFetch('/api/unpair',{method:'POST',body:'{}'});}catch(_){}requirePairing();});
+  phonePlayer.addEventListener('ended',()=>{$('phoneNowPlaying').textContent='Phone playback finished.';});
+  (async()=>{const match=window.location.hash.match(/(?:^#|&)pin=(\d{6})(?:&|$)/);if(match){$('pinInput').value=match[1];history.replaceState(null,'',window.location.pathname+window.location.search);await pair();}try{const info=await jsonFetch('/api/info');$('projectName').textContent=info.project||'Remote Control';}catch(_){}await poll();if(paired)await loadTakes();})();
+  setInterval(poll,200); setInterval(()=>{if(paired)loadTakes();},5000);
 })();

@@ -11,7 +11,11 @@ from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable
-from urllib.parse import unquote, urlparse
+
+import numpy as np
+import soundfile as sf
+import struct
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .embedded_web import EMBEDDED_WEB
 
@@ -32,11 +36,15 @@ class ControllerServer:
         state_provider: Callable[[], dict],
         token: str,
         web_root: Path | None = None,
+        take_provider: Callable[[], list[dict]] | None = None,
+        take_resolver: Callable[[str], Path] | None = None,
     ):
         self.command_sink = command_sink
         self.state_provider = state_provider
         self.token = str(token)
         self.web_root = Path(web_root) if web_root else None
+        self.take_provider = take_provider
+        self.take_resolver = take_resolver
         self.httpd: ThreadingHTTPServer | None = None
         self.thread: threading.Thread | None = None
         self.port: int | None = None
@@ -199,6 +207,48 @@ class ControllerServer:
                     return
                 return self._send_json(404, {"error": "not found"})
 
+            def _send_phone_audio(self, path: Path) -> None:
+                """Stream a browser-friendly stereo 16-bit WAV mix without creating a temp file."""
+                try:
+                    handle = sf.SoundFile(str(path), mode="r")
+                except Exception as exc:
+                    return self._send_json(404, {"error": f"Audio unavailable: {exc}"})
+                try:
+                    frames = int(handle.frames)
+                    sample_rate = int(handle.samplerate)
+                    channels = 2
+                    bits = 16
+                    block_align = channels * bits // 8
+                    data_size = frames * block_align
+                    if data_size > 0xFFFFFFFF - 44:
+                        return self._send_json(413, {"error": "Take is too large for browser WAV streaming."})
+                    header = (
+                        b"RIFF" + struct.pack("<I", 36 + data_size) + b"WAVE"
+                        + b"fmt " + struct.pack("<IHHIIHH", 16, 1, channels, sample_rate, sample_rate * block_align, block_align, bits)
+                        + b"data" + struct.pack("<I", data_size)
+                    )
+                    self.send_response(200)
+                    self.send_header("Content-Type", "audio/wav")
+                    self.send_header("Content-Length", str(len(header) + data_size))
+                    self.send_header("Content-Disposition", f'inline; filename="{path.stem}_phone_mix.wav"')
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("X-Content-Type-Options", "nosniff")
+                    self.end_headers()
+                    self.wfile.write(header)
+                    while True:
+                        data = handle.read(8192, dtype="float32", always_2d=True)
+                        if not len(data):
+                            break
+                        mono = np.mean(data, axis=1, dtype=np.float32)
+                        mono = np.clip(mono, -1.0, 1.0)
+                        pcm = (mono * 32767.0).astype("<i2")
+                        stereo = np.column_stack((pcm, pcm)).astype("<i2", copy=False)
+                        self.wfile.write(stereo.tobytes())
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                finally:
+                    handle.close()
+
             def do_GET(self) -> None:
                 parsed = urlparse(self.path)
                 path = parsed.path
@@ -221,6 +271,24 @@ class ControllerServer:
                             "pairing_required": not self._authorized(),
                         },
                     )
+                if path == "/api/takes":
+                    if not self._authorized():
+                        return self._send_json(401, {"error": "unauthorized", "pairing_required": True})
+                    try:
+                        takes = parent.take_provider() if parent.take_provider else []
+                        return self._send_json(200, {"takes": takes})
+                    except Exception as exc:
+                        return self._send_json(500, {"error": str(exc)})
+                if path == "/api/audio":
+                    if not self._authorized():
+                        return self._send_json(401, {"error": "unauthorized", "pairing_required": True})
+                    try:
+                        take_id = parse_qs(parsed.query).get("id", [""])[0]
+                        if not parent.take_resolver:
+                            raise FileNotFoundError("Take resolver unavailable.")
+                        return self._send_phone_audio(parent.take_resolver(take_id))
+                    except Exception as exc:
+                        return self._send_json(404, {"error": str(exc)})
                 return self._serve_web(path)
 
             def do_POST(self) -> None:
