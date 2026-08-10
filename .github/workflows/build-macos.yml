@@ -1,0 +1,96 @@
+name: Build macOS App
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-macos:
+    name: Build ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+            label: Apple-Silicon
+          - runner: macos-15-intel
+            arch: x86_64
+            label: Intel
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Show build environment
+        run: |
+          sw_vers
+          uname -m
+          python --version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install "pyinstaller>=6.10,<7"
+
+      - name: Run automated tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Build macOS app
+        run: |
+          python -m PyInstaller \
+            --noconfirm \
+            --clean \
+            --windowed \
+            --name FilmSetRecorder \
+            --icon assets/icon.icns \
+            --add-data "assets:assets" \
+            --add-data "web:web" \
+            --collect-all sounddevice \
+            --collect-all soundfile \
+            --osx-bundle-identifier com.filmsetrecorder.app \
+            --target-architecture "${{ matrix.arch }}" \
+            app.py
+
+      - name: Add macOS privacy descriptions
+        run: |
+          PLIST="dist/FilmSetRecorder.app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string FilmSet Recorder needs microphone access to record production audio from your selected audio interface." "$PLIST" || \
+          /usr/libexec/PlistBuddy -c "Set :NSMicrophoneUsageDescription FilmSet Recorder needs microphone access to record production audio from your selected audio interface." "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSLocalNetworkUsageDescription string FilmSet Recorder uses your local network so phones, tablets, and ESP32 remotes can control the recorder." "$PLIST" || \
+          /usr/libexec/PlistBuddy -c "Set :NSLocalNetworkUsageDescription FilmSet Recorder uses your local network so phones, tablets, and ESP32 remotes can control the recorder." "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationCategoryType string public.app-category.music" "$PLIST" || true
+
+      - name: Ad-hoc sign development app
+        run: |
+          codesign --force --deep --sign - dist/FilmSetRecorder.app
+          codesign --verify --deep --strict --verbose=2 dist/FilmSetRecorder.app
+
+      - name: Create DMG
+        run: |
+          mkdir -p release/dmg-root
+          cp -R dist/FilmSetRecorder.app release/dmg-root/
+          ln -s /Applications release/dmg-root/Applications
+          hdiutil create \
+            -volname "FilmSet Recorder" \
+            -srcfolder release/dmg-root \
+            -ov \
+            -format UDZO \
+            "release/FilmSetRecorder_0.5.0_${{ matrix.arch }}.dmg"
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v5
+        with:
+          name: FilmSetRecorder-macOS-v0.5.0-${{ matrix.arch }}
+          path: release/FilmSetRecorder_0.5.0_${{ matrix.arch }}.dmg
+          retention-days: 30
