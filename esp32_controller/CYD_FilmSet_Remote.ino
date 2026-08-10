@@ -10,7 +10,7 @@ const char* WIFI_SSID = "YOUR_WIFI";
 const char* WIFI_PASSWORD = "YOUR_PASSWORD";
 const char* RECORDER_IP = "192.168.1.100";   // Shown by desktop app
 const uint16_t RECORDER_PORT = 8765;
-const char* RECORDER_TOKEN = "filmset";
+const char* RECORDER_TOKEN = "000000";  // Copy the 6-digit PIN shown in the desktop SYSTEM card
 // --------------------
 
 // Common ESP32-2432S028R (2.8 inch CYD) touch pins.
@@ -34,6 +34,8 @@ struct RecorderState {
   float elapsed = 0;
   int take = 1;
   int xruns = 0;
+  int droppedBlocks = 0;
+  float meters[4] = {-80, -80, -80, -80};
   String scene = "1";
   String roll = "A001";
   String lastFile = "";
@@ -68,7 +70,7 @@ void sendCommand(const char* command) {
   http.begin(baseUrl() + "/command");
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-FilmRec-Token", RECORDER_TOKEN);
-  String payload = String("{\"command\":\"") + command + "\"}";
+  String payload = String("{\"command\":\"") + command + "\",\"request_id\":\"" + String(millis()) + "\"}";
   http.POST(payload);
   http.end();
   delay(60);
@@ -98,6 +100,11 @@ void pollStatus() {
       state.take = doc["take"] | 1;
       state.circle = doc["circle"] | false;
       state.xruns = doc["xruns"] | 0;
+      state.droppedBlocks = doc["dropped_blocks"] | 0;
+      JsonArray meterArray = doc["meters"].as<JsonArray>();
+      for (int i = 0; i < 4; i++) {
+        state.meters[i] = (i < meterArray.size()) ? (meterArray[i] | -80.0f) : -80.0f;
+      }
       state.lastFile = String((const char*)(doc["last_file"] | ""));
     } else {
       state.online = false;
@@ -129,6 +136,24 @@ void drawButton(const Button& b, bool active = false) {
   tft.drawString(b.label, b.x + b.w / 2, b.y + b.h / 2, 2);
 }
 
+void drawMiniMeters() {
+  const int startX = 10;
+  const int y = 106;
+  const int meterW = 70;
+  const int meterH = 6;
+  const int gap = 7;
+  for (int i = 0; i < 4; i++) {
+    int x = startX + i * (meterW + gap);
+    float db = constrain(state.meters[i], -60.0f, 0.0f);
+    int fill = (int)((db + 60.0f) / 60.0f * meterW);
+    uint16_t color = TFT_GREEN;
+    if (db > -12.0f) color = TFT_YELLOW;
+    if (db > -6.0f) color = TFT_RED;
+    tft.drawRoundRect(x, y, meterW, meterH, 2, TFT_DARKGREY);
+    if (fill > 0) tft.fillRoundRect(x + 1, y + 1, max(1, fill - 2), meterH - 2, 1, color);
+  }
+}
+
 void drawScreen() {
   tft.fillScreen(TFT_BLACK);
   tft.setTextDatum(TL_DATUM);
@@ -144,18 +169,18 @@ void drawScreen() {
   }
 
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.drawString("ROLL " + state.roll + "   SCENE " + state.scene, 10, 58, 2);
-  tft.drawString("TAKE " + String(state.take) + (state.circle ? "  *CIRCLE*" : ""), 10, 82, 2);
+  tft.drawString("R " + state.roll + "   S " + state.scene + "   T " + String(state.take) + (state.circle ? " *" : ""), 10, 58, 2);
 
   tft.setTextDatum(MC_DATUM);
   tft.setTextColor(state.recording ? TFT_RED : TFT_WHITE, TFT_BLACK);
-  tft.drawString(elapsedText(state.elapsed), 160, 102, 4);
+  tft.drawString(elapsedText(state.elapsed), 160, 88, 4);
+  drawMiniMeters();
 
   for (int i = 0; i < BUTTON_COUNT; i++) drawButton(buttons[i]);
 
   tft.setTextDatum(BL_DATUM);
   tft.setTextColor(state.xruns > 0 ? TFT_ORANGE : TFT_DARKGREY, TFT_BLACK);
-  tft.drawString("WiFi " + String(WiFi.RSSI()) + " dBm   XRUN " + String(state.xruns), 8, 239, 1);
+  tft.drawString("WiFi " + String(WiFi.RSSI()) + " dBm  XRUN " + String(state.xruns) + " DROP " + String(state.droppedBlocks), 8, 239, 1);
 }
 
 bool readTouch(int &sx, int &sy) {

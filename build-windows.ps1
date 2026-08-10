@@ -1,10 +1,10 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-Write-Host "=== FilmSet Recorder Windows Builder ===" -ForegroundColor Cyan
+Write-Host "=== FilmSet Recorder 0.2 Windows Builder ===" -ForegroundColor Cyan
 
 if (-not (Get-Command py -ErrorAction SilentlyContinue) -and -not (Get-Command python -ErrorAction SilentlyContinue)) {
-    throw "Python was not found. Install Python 3.12 (64-bit) and rerun this script."
+    throw "Python was not found. Install Python 3.12 (64-bit) and rerun this script. GitHub Actions users do not need Python locally."
 }
 
 $python = if (Get-Command py -ErrorAction SilentlyContinue) { "py" } else { "python" }
@@ -24,6 +24,7 @@ $venvPython = Join-Path $PSScriptRoot ".buildvenv\Scripts\python.exe"
 & $venvPython -m pip install --upgrade pip
 & $venvPython -m pip install -r requirements.txt
 & $venvPython -m pip install "pyinstaller>=6.10,<7"
+& $venvPython -m unittest discover -s tests -v
 
 Remove-Item build, dist, release -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force release | Out-Null
@@ -42,7 +43,6 @@ if (-not $iscc) {
     Write-Host "The portable app is in: dist\FilmSetRecorder\" -ForegroundColor Green
     Write-Host ""
     Write-Host "To create the installer EXE, install Inno Setup 6, then rerun this script." -ForegroundColor Yellow
-    Write-Host "You can install it with: winget install JRSoftware.InnoSetup" -ForegroundColor Yellow
     exit 0
 }
 
@@ -50,4 +50,4 @@ if (-not $iscc) {
 
 Write-Host ""
 Write-Host "Build complete." -ForegroundColor Green
-Write-Host "Installer: release\FilmSetRecorder_Setup_0.1.0.exe" -ForegroundColor Green
+Write-Host "Installer: release\FilmSetRecorder_Setup_0.2.0.exe" -ForegroundColor Green

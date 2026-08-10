@@ -1,34 +1,31 @@
-# Building the Windows installer
+# Build the Windows installer
 
-This project is prepared to produce a normal Windows installer named:
+## Easiest method: GitHub Actions
 
-`FilmSetRecorder_Setup_0.1.0.exe`
+You do **not** need Python on the recording PC.
 
-The installer contains Python and the application dependencies, so the target recording computer does **not** need Python installed.
+1. Upload this repository to GitHub with the `.github` folder at the repository root.
+2. Open the repository's **Actions** tab.
+3. Select **Build Windows Installer**.
+4. Click **Run workflow**.
+5. Wait for the Windows build to finish with a green check mark.
+6. Open the completed run.
+7. Under **Artifacts**, download `FilmSetRecorder-Windows-Installer-v0.2.0`.
+8. Unzip the artifact.
+9. Run `FilmSetRecorder_Setup_0.2.0.exe`.
 
-## Fastest local build
+The workflow runs unit tests, compiles the Python source, builds the application with PyInstaller, creates the installer with Inno Setup, and uploads both installer and portable artifacts.
 
-Use a 64-bit Windows 10 or Windows 11 PC.
+## Local developer build
 
-1. Install Python 3.12 (64-bit).
-2. Install Inno Setup 6. A convenient command is:
-   `winget install JRSoftware.InnoSetup`
-3. Open PowerShell in the project folder.
-4. Run:
-   `powershell -ExecutionPolicy Bypass -File .\build-windows.ps1`
-5. The finished installer will be:
-   `release\FilmSetRecorder_Setup_0.1.0.exe`
+A local Windows build requires Python 3.12 and Inno Setup 6. From PowerShell in the repository root:
 
-The build script creates an isolated build environment, installs the runtime requirements and PyInstaller, creates the self-contained application folder, then wraps it in an Inno Setup installer.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build-windows.ps1
+```
 
-## GitHub Actions build
+The completed installer is placed in:
 
-A workflow is included at `.github/workflows/build-windows.yml`. If the project is pushed to GitHub, run **Build Windows Installer** from the Actions tab. The workflow builds on a real Windows runner and uploads the installer as an artifact.
-
-## Audio driver note
-
-The FilmSet Recorder installer does not install Behringer hardware drivers. Install the correct UMC404HD Windows driver separately before using the recorder.
-
-## Prototype warning
-
-Version 0.1 is still an engineering prototype. Test it extensively before using it for irreplaceable production audio. In particular, verify long recordings, interface reconnect behavior, sample-rate selection, disk-full behavior, sleep/power settings, and recovery after forced termination.
+```text
+release\FilmSetRecorder_Setup_0.2.0.exe
+```

@@ -1,141 +1,196 @@
-# FilmSet Recorder 0.1
+# FilmSet Recorder 0.2.0
 
-A first working scaffold for a Windows/macOS multichannel production-dialogue recorder, plus a Wi-Fi remote-control API intended for an ESP32 Cheap Yellow Display (CYD).
+FilmSet Recorder is a cross-platform multitrack production-dialogue recorder built for film sets. The desktop application is written in Python/PySide6 and is designed around a field-recorder workflow rather than a general-purpose DAW.
 
-## What this prototype does
+> **Engineering build:** 0.2.0 is intended for development and hardware validation. Do not use it as the only recorder for irreplaceable production audio until the stress-test checklist has been completed on the exact computer, interface, storage device, and sample-rate configuration you will use on set.
 
-- Lists PortAudio/Core Audio/WASAPI/ASIO-visible devices through `sounddevice`.
-- Auto-selects a device whose name contains `UMC404` when possible.
-- Records up to the selected number of input channels into one polyphonic 24-bit WAV file.
-- Defaults to 48 kHz, with 96 kHz selectable.
-- Displays live per-channel peak meters.
-- Uses an audio callback + queue + dedicated writer thread so disk I/O does not happen directly in the audio callback.
-- Scene, take, roll and four track-name fields.
-- Record, stop, play-last, next-take and circle-take controls.
-- Creates a JSON sidecar with take metadata. (True BWF/iXML embedding is planned for the next stage.)
-- Runs a small HTTP remote-control server on port 8765 for the ESP32 controller.
+## What is new in 0.2
 
-## Install and run
+- Completely redesigned modern dark GUI
+- Large production slate and transport controls
+- Up to 16 visible ISO track strips with editable names and record-arm state
+- Purpose-built peak meters with peak hold and clipping indication
+- 24-bit polyphonic WAV recording
+- 48 kHz and 96 kHz operation
+- Configurable 256 / 512 / 1024 frame input buffers
+- 0-10 second pre-roll buffer
+- Dedicated disk-writer thread so the PortAudio callback never writes to disk
+- Bounded write queue with dropped-block accounting
+- XRUN counter and recorder-health display
+- Crash-resilient `.partial.wav` recording with periodic WAV-header refresh followed by atomic final rename
+- Startup recovery of interrupted partial recordings
+- No-overwrite file allocation; duplicate slate/take combinations receive a safe suffix
+- Persistent project, audio, slate, track-name, window, and remote settings
+- Automatic JSON take metadata
+- Automatic CSV sound report generation
+- Streaming playback of the last take as a dialog mix instead of loading the whole file into RAM
+- Disk-space and estimated remaining-record-time display
+- Low-disk recording interlock below 512 MB plus automatic safety stop below 256 MB
+- Automatic safety stop if the disk-writer queue reaches a critical backlog before silent data loss
+- Keep-awake mode for Windows and macOS idle sleep
+- Local Wi-Fi ESP32 remote-control server
+- Per-install six-digit remote pairing PIN
+- Remote status now includes track names, arm states, meters, XRUNs, and dropped blocks
+- Rotating application logs
+- Saveable audio/system diagnostics report
+- Automated unit tests in GitHub Actions
+- Windows installer workflow and macOS DMG workflow
 
-Python 3.11 or 3.12 is recommended for the prototype.
+## Desktop workflow
 
-### Windows
+1. Connect and power the audio interface before launching FilmSet Recorder.
+2. Choose the film project folder.
+3. Select the input and output device.
+4. Choose 48 kHz or 96 kHz, input channel count, buffer size, and pre-roll.
+5. Click **Apply / Start Audio**.
+6. Verify meters on every required input.
+7. Name and arm the ISO tracks.
+8. Enter roll, scene, take, and frame-rate metadata.
+9. Record. FilmSet Recorder writes to a recoverable `.partial.wav` while the take is active.
+10. Stop. A clean take is atomically renamed to its final `.wav`, its `.json` metadata is written, and `sound_report.csv` is rebuilt.
+11. Use **PLAY LAST**, **CIRCLE**, and **NEXT TAKE** as needed.
 
-```powershell
-py -m venv .venv
-.venv\Scripts\activate
-python -m pip install -r requirements.txt
-python app.py
-```
+## File layout
 
-For the UMC404HD, install Behringer's current Windows driver first. In the application's device list, prefer the UMC404HD entry exposed through the best low-latency host API available on your machine. The prototype uses PortAudio via `sounddevice`; dedicated ASIO-path validation is an important next test on Windows.
-
-### macOS
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-python app.py
-```
-
-On first use, macOS may ask for microphone permission for Terminal/Python or the packaged app.
-
-## Recording layout
-
-If project folder is `/MyFilm`, roll is `A001`, scene is `24B`, and take is 3:
-
-```text
-/MyFilm/
-  A001/
-    A001_24B_T003.wav
-    A001_24B_T003.json
-```
-
-The WAV is a polyphonic file: each interface input is stored as its own channel.
-
-## Remote API
-
-The desktop program displays its local address near the bottom of the window.
-
-Default port: `8765`
-
-Default prototype token: `filmset`
-
-Every protected request sends this header:
+Example:
 
 ```text
-X-FilmRec-Token: filmset
+My Movie/
+|-- .filmset/
+|-- sound_report.csv
+|-- A001/
+|   |-- A001_24B_T001.wav
+|   |-- A001_24B_T001.json
+|   |-- A001_24B_T002.wav
+|   `-- A001_24B_T002.json
+`-- A002/
 ```
 
-Endpoints:
+During recording you may temporarily see:
 
-- `GET /health`
-- `GET /status`
-- `POST /command`
-
-Example command body:
-
-```json
-{"command":"record"}
+```text
+A001_24B_T003.partial.wav
 ```
 
-Supported commands are `record`, `stop`, `play`, `next_take`, `circle`, `set_scene`, and `set_take`.
+That file is deliberate. It is renamed only after a clean stop. If the application or computer is interrupted, FilmSet Recorder detects the partial recording the next time the project opens and offers to recover it.
 
-## Important on-set limitations of 0.1
+## UMC404HD notes
 
-This is an engineering prototype, not yet a replacement for a certified field recorder. Before using it for an irreplaceable take, we should add and test BWF/iXML, file-recovery behavior, device-disconnect recovery, long-duration recording, storage-space alarms, sample-drop detection, duplicate/backup recording, and automated stress tests.
+The Behringer UMC404HD is a primary development target for this project. On Windows, install the current Behringer driver first. FilmSet Recorder displays whichever PortAudio host APIs and channel arrangements are actually available on the machine. Do not assume ASIO is present merely because the Behringer driver is installed; use **Save Diagnostics** to see exactly what the packaged PortAudio build exposes.
 
-The UMC404HD's hardware Direct Monitor path is still the best choice for latency-free headphone monitoring. Software monitoring is deliberately not enabled in this first prototype.
+For headphones during recording, use the UMC404HD hardware **Direct Monitor** path. Software input monitoring is intentionally disabled in 0.2 because dependable zero/low-latency monitoring requires more platform-specific validation.
 
-Closing a laptop lid can put the computer to sleep. The ESP32 remote can control the application while the display is off or the computer is otherwise awake, but it cannot keep recording after the operating system suspends the laptop. Configure the computer's power behavior appropriately and test it before a shoot.
+## Windows installer with GitHub Actions
 
-## Next milestone
+The repository includes:
 
-1. Embed proper BWF + iXML metadata.
-2. Add pre-record buffer (5-10 seconds).
-3. Add per-track arm/mute and ISO naming.
-4. Add a mix track and safety-track options.
-5. Add LTC timecode input/reader and frame-rate aware display.
-6. Add dual-drive/background backup.
-7. Add sound-report CSV/PDF export.
-8. Package `.exe` and `.app` installers.
+```text
+.github/workflows/build-windows.yml
+```
+
+Open **Actions -> Build Windows Installer -> Run workflow**. After the workflow succeeds, download the artifact:
+
+```text
+FilmSetRecorder-Windows-Installer-v0.2.0
+```
+
+Inside it is:
+
+```text
+FilmSetRecorder_Setup_0.2.0.exe
+```
+
+The target recording PC does not need Python installed. It still needs the appropriate audio-interface driver.
+
+## macOS DMG with GitHub Actions
+
+The repository also includes:
+
+```text
+.github/workflows/build-macos.yml
+```
+
+Run **Build macOS App** and download the `FilmSetRecorder-macOS-v0.2.0` artifact. The generated app is not Apple-notarized or Developer-ID signed yet, so Gatekeeper warnings are expected on development builds.
 
 ## ESP32 Cheap Yellow Display remote
 
-The `esp32_controller` folder contains a first-pass Arduino sketch for the common **ESP32-2432S028R 2.8-inch CYD** (ILI9341 + XPT2046). CYD boards are sold in several revisions and sizes, so confirm the exact model printed on your PCB before relying on the included pin map.
+The desktop application starts a small HTTP controller service on port `8765`. The SYSTEM card shows both the recorder IP address and a six-digit PIN.
 
-Libraries used by the sketch:
+Edit these values in:
 
-- Arduino ESP32 core
-- TFT_eSPI
-- XPT2046_Touchscreen
-- ArduinoJson
-
-Before flashing:
-
-1. Configure TFT_eSPI using the included `User_Setup_CYD.h` values, adjusted if your board revision differs.
-2. Put your Wi-Fi SSID/password into `CYD_FilmSet_Remote.ino`.
-3. Run FilmSet Recorder and copy the IP address displayed at the bottom of the desktop app into `RECORDER_IP`.
-4. Keep the prototype token as `filmset` on both ends, or change it in both places.
-5. Calibrate the touch panel; clone boards vary enough that the example raw min/max values may need adjustment.
-
-The remote currently provides Record, Stop, Play Last, Next Take and Circle Take, while displaying roll, scene, take, elapsed recording time and an XRUN counter.
-
-### Recommended controller direction
-
-For the next revision, the CYD should gain a setup page so Wi-Fi, recorder IP and pairing token can be entered on the touchscreen instead of compiled into firmware. We can also add scene/take +/- controls, battery status, a physical REC button input, lock screen, haptic/buzzer feedback and automatic recorder discovery via mDNS.
-
-## Windows installer build
-
-This package now includes a Windows packaging setup. On a Windows 10/11 development machine with Python 3.12 and Inno Setup 6 installed, run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\build-windows.ps1
+```text
+esp32_controller/CYD_FilmSet_Remote.ino
 ```
 
-The finished installer is written to:
+```cpp
+const char* WIFI_SSID = "YOUR_WIFI";
+const char* WIFI_PASSWORD = "YOUR_PASSWORD";
+const char* RECORDER_IP = "192.168.1.100";
+const uint16_t RECORDER_PORT = 8765;
+const char* RECORDER_TOKEN = "000000";
+```
 
-`release\FilmSetRecorder_Setup_0.1.0.exe`
+Replace `RECORDER_TOKEN` with the six-digit PIN displayed by FilmSet Recorder.
 
-See `BUILD_WINDOWS.md` for details. A GitHub Actions workflow is also included so the installer can be built on a Windows runner without maintaining a dedicated build PC.
+Current remote controls:
+
+- Record
+- Stop
+- Play last take
+- Next take
+- Circle take
+- Set scene through the API
+- Set take through the API
+
+Current remote status includes recording state, elapsed time, roll, scene, take, circle state, XRUNs, dropped blocks, track names, arm states, and meter values.
+
+## Keyboard shortcuts
+
+- `F9` - record / stop current take
+- `Esc` - stop recording or playback
+- `F8` - play last take
+- `Ctrl+N` - next take
+- `Ctrl+Shift+C` - toggle circle
+
+## Current metadata behavior
+
+Version 0.2 stores production metadata in a JSON sidecar and a project-level CSV sound report. Proper embedded Broadcast Wave (BWF `bext`) and iXML metadata are planned for a later milestone after the core recording path is validated.
+
+## Reliability design
+
+The recorder has several deliberate safety choices:
+
+- Audio callback does not write to disk.
+- Disk writes happen on a dedicated thread.
+- The writer queue is bounded instead of growing without limit.
+- Queue overruns are counted as dropped blocks.
+- PortAudio status events increment the XRUN counter.
+- Active takes are written to a partial file and the WAV header is refreshed periodically so interrupted files remain readable near the last sync point.
+- Clean completion uses an atomic filesystem rename.
+- Existing take files are never overwritten automatically.
+- Take metadata is written atomically through a temporary JSON file.
+- Sound reports are rebuilt atomically.
+- Low disk space can block recording.
+- Interrupted partial WAV files can be recovered at next project open.
+- Application logs rotate instead of growing indefinitely.
+
+## Sleep / lid behavior
+
+**Keep computer awake** prevents normal idle system sleep on supported Windows and macOS systems without intentionally forcing the display to remain on. It cannot override every hardware lid-close rule. In particular, a Mac can still sleep when the lid closes unless it is in a supported clamshell configuration. Test the exact laptop behavior before relying on a closed-lid workflow.
+
+## What is intentionally not in 0.2 yet
+
+- BWF `bext` metadata
+- iXML metadata
+- LTC decoding / timecode jam
+- true time-of-day BWF time reference
+- software headphone monitoring and monitor routing
+- mix track in addition to ISO tracks
+- safety-track channel generation
+- waveform editor
+- destructive editing
+- plug-ins / effects
+- cloud synchronization
+- code signing / notarization
+
+See `ROADMAP.md` for the planned progression.

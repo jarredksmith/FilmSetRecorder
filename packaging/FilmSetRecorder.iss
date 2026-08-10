@@ -1,5 +1,5 @@
 #define MyAppName "FilmSet Recorder"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.2.0"
 #define MyAppExeName "FilmSetRecorder.exe"
 
 [Setup]
@@ -7,11 +7,11 @@ AppId={{B560CBAA-ED80-42D5-B7CB-341CA73871C4}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
-DefaultDirName={autopf}\FilmSet Recorder
+DefaultDirName={localappdata}\Programs\FilmSet Recorder
 DefaultGroupName=FilmSet Recorder
 DisableProgramGroupPage=yes
 OutputDir=..\release
-OutputBaseFilename=FilmSetRecorder_Setup_0.1.0
+OutputBaseFilename=FilmSetRecorder_Setup_0.2.0
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -19,7 +19,11 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayName={#MyAppName}
+UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\assets\icon.ico
 SetupLogging=yes
+CloseApplications=yes
+RestartApplications=no
 
 [Files]
 Source: "..\dist\FilmSetRecorder\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
