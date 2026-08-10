@@ -14,7 +14,7 @@ from pathlib import Path
 
 import qrcode
 import soundfile as sf
-from PySide6.QtCore import QSettings, QStandardPaths, QTimer, Qt, QUrl
+from PySide6.QtCore import QSize, QSettings, QStandardPaths, QTimer, Qt, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QImage, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QSplitter,
     QTabWidget,
+    QToolButton,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
@@ -73,6 +74,30 @@ def _default_project_dir() -> Path:
     documents = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
     root = Path(documents) if documents else Path.home() / "Documents"
     return root / "FilmSet Recorder" / "Untitled Project"
+
+
+def _ui_icon(name: str) -> QIcon:
+    """Load a packaged FilmSet UI icon. Returns an empty QIcon on failure."""
+    path = resource_path(Path("assets") / "icons" / f"{name}.png")
+    return QIcon(str(path)) if path.exists() else QIcon()
+
+
+def _icon_label(name: str, size: int = 20) -> QLabel:
+    label = QLabel()
+    label.setObjectName("SectionIcon")
+    label.setFixedSize(size + 4, size + 4)
+    label.setAlignment(Qt.AlignCenter)
+    icon = _ui_icon(name)
+    if not icon.isNull():
+        label.setPixmap(icon.pixmap(QSize(size, size)))
+    return label
+
+
+def _button_icon(button: QPushButton, name: str, size: int = 18) -> None:
+    icon = _ui_icon(name)
+    if not icon.isNull():
+        button.setIcon(icon)
+        button.setIconSize(QSize(size, size))
 
 
 class MainWindow(QMainWindow):
@@ -152,6 +177,10 @@ class MainWindow(QMainWindow):
         file_menu.addAction(exit_action)
 
         tools_menu = self.menuBar().addMenu("Tools")
+        audio_setup_action = QAction("Audio Setup...", self)
+        audio_setup_action.triggered.connect(lambda: self.workspace.setCurrentIndex(4))
+        tools_menu.addAction(audio_setup_action)
+        tools_menu.addSeparator()
         diagnostics_action = QAction("Save Diagnostics...", self)
         diagnostics_action.triggered.connect(self.save_diagnostics)
         tools_menu.addAction(diagnostics_action)
@@ -187,32 +216,43 @@ class MainWindow(QMainWindow):
         nav_l = QVBoxLayout(nav)
         nav_l.setContentsMargins(10, 16, 10, 14)
         nav_l.setSpacing(8)
-        logo = QLabel("▥")
+        logo = QLabel()
         logo.setObjectName("LogoMark")
         logo.setAlignment(Qt.AlignCenter)
         logo.setFixedHeight(56)
+        brand_pix = QPixmap(str(resource_path("assets/icon.png")))
+        if not brand_pix.isNull():
+            logo.setPixmap(brand_pix.scaled(42, 42, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         nav_l.addWidget(logo)
         self.nav_buttons = []
-        def nav_button(text: str, index: int):
-            btn = QPushButton(text)
+        def nav_button(text: str, icon_name: str, index: int):
+            btn = QToolButton()
+            btn.setText(text)
+            btn.setIcon(_ui_icon(icon_name))
+            btn.setIconSize(QSize(25, 25))
+            btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
             btn.setObjectName("NavButton")
             btn.setCheckable(True)
             btn.setAutoExclusive(True)
-            btn.setMinimumHeight(62)
+            btn.setMinimumHeight(66)
             btn.clicked.connect(lambda _checked=False, i=index: self.workspace.setCurrentIndex(i))
             nav_l.addWidget(btn)
             self.nav_buttons.append(btn)
             return btn
-        nav_button("REC\nRecord", 0)
-        nav_button("TAKES\nTakes", 1)
-        nav_button("NOTE\nNotes", 2)
-        nav_button("WIFI\nRemote", 3)
-        nav_button("SYS\nSystem", 4)
+        nav_button("Record", "record", 0)
+        nav_button("Takes", "takes", 1)
+        nav_button("Notes", "notes", 2)
+        nav_button("Remote", "remote", 3)
+        nav_button("System", "system", 4)
         self.nav_buttons[0].setChecked(True)
         nav_l.addStretch(1)
-        help_label = QLabel("?\nHelp")
-        help_label.setObjectName("NavHelp")
-        help_label.setAlignment(Qt.AlignCenter)
+        help_label = QToolButton()
+        help_label.setText("Help")
+        help_label.setIcon(_ui_icon("help"))
+        help_label.setIconSize(QSize(22, 22))
+        help_label.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        help_label.setObjectName("NavHelpButton")
+        help_label.clicked.connect(self.show_about)
         nav_l.addWidget(help_label)
         shell.addWidget(nav)
 
@@ -227,9 +267,15 @@ class MainWindow(QMainWindow):
         # BRAND / STATUS BAR
         top = QHBoxLayout()
         top.setSpacing(10)
-        brand_icon = QLabel("▮▮▮")
+        brand_icon = QLabel()
         brand_icon.setObjectName("BrandWave")
-        brand_icon.setFixedWidth(50)
+        brand_icon.setFixedSize(46, 46)
+        brand_icon.setAlignment(Qt.AlignCenter)
+        brand_pixmap = QPixmap(str(resource_path("assets/icon.png")))
+        if not brand_pixmap.isNull():
+            brand_icon.setPixmap(brand_pixmap.scaled(42, 42, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            brand_icon.setText("FS")
         top.addWidget(brand_icon)
         brand = QVBoxLayout()
         brand.setSpacing(0)
@@ -244,10 +290,10 @@ class MainWindow(QMainWindow):
         self.format_label = QLabel("48 kHz · 24-bit · POLY WAV")
         self.format_label.setObjectName("FormatReadout")
         top.addWidget(self.format_label)
-        self.audio_pill = StatusPill("AUDIO OFF", "neutral")
-        self.remote_pill = StatusPill("REMOTE", "neutral")
-        self.disk_pill = StatusPill("DISK --", "neutral")
-        self.state_pill = StatusPill("IDLE", "neutral")
+        self.audio_pill = StatusPill("AUDIO OFF", "neutral", _ui_icon("audio"))
+        self.remote_pill = StatusPill("REMOTE", "neutral", _ui_icon("remote"))
+        self.disk_pill = StatusPill("DISK --", "neutral", _ui_icon("disk"))
+        self.state_pill = StatusPill("IDLE", "neutral", _ui_icon("idle"))
         for pill in (self.audio_pill, self.remote_pill, self.disk_pill, self.state_pill):
             top.addWidget(pill)
         body_l.addLayout(top)
@@ -273,7 +319,8 @@ class MainWindow(QMainWindow):
         sg.setVerticalSpacing(4)
         slate_title = QLabel("SLATE")
         slate_title.setObjectName("SectionTitle")
-        sg.addWidget(slate_title, 0, 0, 1, 4)
+        sg.addWidget(_icon_label("slate", 20), 0, 0)
+        sg.addWidget(slate_title, 0, 1, 1, 3)
         self.roll_edit = QLineEdit("A001")
         self.scene_edit = QLineEdit("1")
         self.take_spin = QSpinBox()
@@ -292,6 +339,7 @@ class MainWindow(QMainWindow):
         sg.addWidget(next_label, 1, 4)
         sg.addWidget(self.filename_preview, 2, 4)
         reset_take = QPushButton("Reset Take")
+        _button_icon(reset_take, "reset")
         reset_take.clicked.connect(lambda: self.take_spin.setValue(1))
         sg.addWidget(reset_take, 2, 5)
         for c in range(6): sg.setColumnStretch(c, 1 if c < 4 else (2 if c == 4 else 0))
@@ -311,7 +359,7 @@ class MainWindow(QMainWindow):
         ch = QHBoxLayout()
         title = QLabel("ISO TRACKS"); title.setObjectName("SectionTitle")
         self.input_summary = QLabel("4 INPUTS"); self.input_summary.setObjectName("SectionMeta")
-        ch.addWidget(title); ch.addStretch(1); ch.addWidget(self.input_summary)
+        ch.addWidget(_icon_label("tracks", 20)); ch.addWidget(title); ch.addStretch(1); ch.addWidget(self.input_summary)
         cl.addLayout(ch)
         self.track_scroll = QScrollArea(); self.track_scroll.setWidgetResizable(True); self.track_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         track_container = QWidget(); track_container.setObjectName("TrackContainer")
@@ -330,14 +378,15 @@ class MainWindow(QMainWindow):
         # Recorder / quick audio panel
         recorder = QFrame(); recorder.setObjectName("RecorderPanel")
         rl = QVBoxLayout(recorder); rl.setContentsMargins(16,14,16,14); rl.setSpacing(10)
-        rh = QHBoxLayout(); rt = QLabel("RECORDER"); rt.setObjectName("SectionTitle"); rh.addWidget(rt); rh.addStretch(1)
+        rh = QHBoxLayout(); rt = QLabel("RECORDER"); rt.setObjectName("SectionTitle"); rh.addWidget(_icon_label("audio", 20)); rh.addWidget(rt); rh.addStretch(1)
         self.quick_audio_state = QLabel("AUDIO OFF"); self.quick_audio_state.setObjectName("TinyState"); rh.addWidget(self.quick_audio_state)
         rl.addLayout(rh)
         self.clock = QLabel("00:00:00.000"); self.clock.setObjectName("HeroClock"); self.clock.setAlignment(Qt.AlignCenter); rl.addWidget(self.clock)
         self.transport_slate = QLabel("A001 · SC 1 · T001"); self.transport_slate.setObjectName("TransportSlate"); self.transport_slate.setAlignment(Qt.AlignCenter); rl.addWidget(self.transport_slate)
-        qlab = QLabel("INPUT INTERFACE"); qlab.setObjectName("FieldLabel"); rl.addWidget(qlab)
-        self.input_combo = QComboBox(); rl.addWidget(self.input_combo)
-        self.apply_audio_button = QPushButton("START / APPLY AUDIO"); self.apply_audio_button.setProperty("role", "primary"); self.apply_audio_button.clicked.connect(self.apply_audio); rl.addWidget(self.apply_audio_button)
+        qlab = QLabel("INPUT DEVICE"); qlab.setObjectName("FieldLabel"); rl.addWidget(qlab)
+        self.input_combo = QComboBox(); self.input_combo.setObjectName("InputDeviceCombo"); self.input_combo.setMinimumHeight(40); rl.addWidget(self.input_combo)
+        self.device_hint = QLabel("Select the interface that carries your production microphones."); self.device_hint.setObjectName("AppSubtitle"); self.device_hint.setWordWrap(True); rl.addWidget(self.device_hint)
+        self.apply_audio_button = QPushButton("Start / Apply Audio"); _button_icon(self.apply_audio_button, "play", 18); self.apply_audio_button.setProperty("role", "primary"); self.apply_audio_button.clicked.connect(self.apply_audio); rl.addWidget(self.apply_audio_button)
         self.awake_check = QCheckBox("Keep computer awake"); self.awake_check.toggled.connect(self._set_power_mode); rl.addWidget(self.awake_check)
         health = QHBoxLayout()
         self.quick_preroll = QLabel("PRE 5s"); self.quick_preroll.setObjectName("MiniHealth")
@@ -352,11 +401,11 @@ class MainWindow(QMainWindow):
         # Transport
         transport = QFrame(); transport.setObjectName("TransportDeck")
         tl = QHBoxLayout(transport); tl.setContentsMargins(18,12,18,12); tl.setSpacing(18)
-        self.record_btn = TransportButton("●\nRECORD", "record"); self.record_btn.clicked.connect(self.toggle_record)
-        self.stop_btn = TransportButton("■\nSTOP", "stop"); self.stop_btn.clicked.connect(self.stop_all)
-        self.play_btn = TransportButton("▶\nPLAY LAST", "secondary"); self.play_btn.clicked.connect(self.play_last)
-        self.next_btn = TransportButton("≫\nNEXT TAKE", "secondary"); self.next_btn.clicked.connect(self.next_take)
-        self.circle_btn = TransportButton("★\nCIRCLE", "circle"); self.circle_btn.setCheckable(True); self.circle_btn.clicked.connect(self.set_circle)
+        self.record_btn = TransportButton("RECORD", "record", _ui_icon("record")); self.record_btn.clicked.connect(self.toggle_record)
+        self.stop_btn = TransportButton("STOP", "stop", _ui_icon("stop")); self.stop_btn.clicked.connect(self.stop_all)
+        self.play_btn = TransportButton("PLAY LAST", "secondary", _ui_icon("play")); self.play_btn.clicked.connect(self.play_last)
+        self.next_btn = TransportButton("NEXT TAKE", "secondary", _ui_icon("next")); self.next_btn.clicked.connect(self.next_take)
+        self.circle_btn = TransportButton("CIRCLE", "circle", _ui_icon("circle")); self.circle_btn.setCheckable(True); self.circle_btn.clicked.connect(self.set_circle)
         self.circle_btn.setToolTip("Mark the current or last completed take as preferred for editorial. Audio is unchanged.")
         for b in (self.record_btn, self.stop_btn, self.play_btn, self.next_btn, self.circle_btn):
             b.setMinimumHeight(78); tl.addWidget(b, 1)
@@ -373,55 +422,57 @@ class MainWindow(QMainWindow):
         # TAKES WORKSPACE ==================================================
         takes_page = QWidget(); takes_page.setObjectName("WorkspacePage")
         tkl = QVBoxLayout(takes_page); tkl.setContentsMargins(8,8,8,8); tkl.setSpacing(10)
-        tk_title = QLabel("TAKES"); tk_title.setObjectName("WorkspaceTitle"); tkl.addWidget(tk_title)
+        tk_head = QHBoxLayout(); tk_head.addWidget(_icon_label("takes", 24)); tk_title = QLabel("TAKES"); tk_title.setObjectName("WorkspaceTitle"); tk_head.addWidget(tk_title); tk_head.addStretch(1); tkl.addLayout(tk_head)
         tk_sub = QLabel("Completed recordings · newest first"); tk_sub.setObjectName("AppSubtitle"); tkl.addWidget(tk_sub)
         self.take_table = QTableWidget(0, 6); self.take_table.setObjectName("TakeTable")
         self.take_table.setHorizontalHeaderLabels(["★", "ROLL", "SCENE", "TAKE", "DURATION", "FILE"])
         self.take_table.verticalHeader().setVisible(False); self.take_table.setSelectionBehavior(QAbstractItemView.SelectRows); self.take_table.setSelectionMode(QAbstractItemView.SingleSelection); self.take_table.setEditTriggers(QAbstractItemView.NoEditTriggers); self.take_table.setShowGrid(False)
         header = self.take_table.horizontalHeader(); header.setSectionResizeMode(0,QHeaderView.ResizeToContents); header.setSectionResizeMode(1,QHeaderView.ResizeToContents); header.setSectionResizeMode(2,QHeaderView.ResizeToContents); header.setSectionResizeMode(3,QHeaderView.ResizeToContents); header.setSectionResizeMode(4,QHeaderView.ResizeToContents); header.setSectionResizeMode(5,QHeaderView.Stretch)
         self.take_table.itemDoubleClicked.connect(lambda _item: self.play_selected_take()); tkl.addWidget(self.take_table,1)
-        tbtn = QHBoxLayout(); refresh_takes = QPushButton("Refresh"); refresh_takes.clicked.connect(self.refresh_take_browser); play_selected = QPushButton("▶ Play Selected"); play_selected.setProperty("role","primary"); play_selected.clicked.connect(self.play_selected_take); reveal = QPushButton("Reveal in Folder"); reveal.clicked.connect(self.show_selected_take_folder); tbtn.addWidget(refresh_takes); tbtn.addWidget(play_selected); tbtn.addWidget(reveal); tbtn.addStretch(1); tkl.addLayout(tbtn)
+        tbtn = QHBoxLayout(); refresh_takes = QPushButton("Refresh"); _button_icon(refresh_takes,"refresh"); refresh_takes.clicked.connect(self.refresh_take_browser); play_selected = QPushButton("Play Selected"); _button_icon(play_selected,"play"); play_selected.setProperty("role","primary"); play_selected.clicked.connect(self.play_selected_take); reveal = QPushButton("Reveal in Folder"); _button_icon(reveal,"reveal"); reveal.clicked.connect(self.show_selected_take_folder); tbtn.addWidget(refresh_takes); tbtn.addWidget(play_selected); tbtn.addWidget(reveal); tbtn.addStretch(1); tkl.addLayout(tbtn)
         self.workspace.addTab(takes_page, "Takes")
 
         # NOTES WORKSPACE ==================================================
         notes_page = QWidget(); nl = QVBoxLayout(notes_page); nl.setContentsMargins(16,16,16,16); nl.setSpacing(10)
-        nt = QLabel("TAKE NOTES"); nt.setObjectName("WorkspaceTitle"); nl.addWidget(nt)
+        nh = QHBoxLayout(); nh.addWidget(_icon_label("notes",24)); nt = QLabel("TAKE NOTES"); nt.setObjectName("WorkspaceTitle"); nh.addWidget(nt); nh.addStretch(1); nl.addLayout(nh)
         ns = QLabel("Notes are written into the completed take metadata and sound report."); ns.setObjectName("AppSubtitle"); nl.addWidget(ns)
         self.notes = QTextEdit(); self.notes.setPlaceholderText("Performance, noise, wild line, wardrobe, aircraft, room tone…"); nl.addWidget(self.notes,1)
         self.workspace.addTab(notes_page,"Notes")
 
         # REMOTE WORKSPACE =================================================
         remote_page = QWidget(); rpl = QVBoxLayout(remote_page); rpl.setContentsMargins(16,16,16,16); rpl.setSpacing(10)
-        rtitle = QLabel("REMOTE CONTROL"); rtitle.setObjectName("WorkspaceTitle"); rpl.addWidget(rtitle)
+        rhead = QHBoxLayout(); rhead.addWidget(_icon_label("remote",24)); rtitle = QLabel("REMOTE CONTROL"); rtitle.setObjectName("WorkspaceTitle"); rhead.addWidget(rtitle); rhead.addStretch(1); rpl.addLayout(rhead)
         self.remote_url_label = QLabel("Starting remote server…"); self.remote_url_label.setObjectName("NetworkAddress"); self.remote_url_label.setTextInteractionFlags(Qt.TextSelectableByMouse); rpl.addWidget(self.remote_url_label)
         self.remote_pin_label = QLabel(f"PAIRING CODE   {self.remote_token}"); self.remote_pin_label.setObjectName("PairingCode"); rpl.addWidget(self.remote_pin_label)
         rhelp = QLabel("Phones, tablets and the ESP32 remote must be on the same local network as this recorder."); rhelp.setObjectName("AppSubtitle"); rhelp.setWordWrap(True); rpl.addWidget(rhelp)
-        rb = QHBoxLayout(); qr_button=QPushButton("Show Pairing QR"); qr_button.setProperty("role","primary"); qr_button.clicked.connect(self.show_remote_qr); open_remote=QPushButton("Open Web Remote"); open_remote.clicked.connect(self.open_web_remote); rb.addWidget(qr_button); rb.addWidget(open_remote); rb.addStretch(1); rpl.addLayout(rb); rpl.addStretch(1)
+        rb = QHBoxLayout(); qr_button=QPushButton("Show Pairing QR"); _button_icon(qr_button,"qr"); qr_button.setProperty("role","primary"); qr_button.clicked.connect(self.show_remote_qr); open_remote=QPushButton("Open Web Remote"); _button_icon(open_remote,"browser"); open_remote.clicked.connect(self.open_web_remote); rb.addWidget(qr_button); rb.addWidget(open_remote); rb.addStretch(1); rpl.addLayout(rb); rpl.addStretch(1)
         self.workspace.addTab(remote_page,"Remote")
 
         # SYSTEM / ADVANCED AUDIO =========================================
         system_page = QWidget(); spl = QVBoxLayout(system_page); spl.setContentsMargins(16,16,16,16); spl.setSpacing(10)
-        st = QLabel("SYSTEM & AUDIO SETUP"); st.setObjectName("WorkspaceTitle"); spl.addWidget(st)
+        sh = QHBoxLayout(); sh.addWidget(_icon_label("system",24)); st = QLabel("SYSTEM & AUDIO SETUP"); st.setObjectName("WorkspaceTitle"); sh.addWidget(st); sh.addStretch(1); spl.addLayout(sh)
+        audio_setup_note = QLabel("Input and output routing is always available here, even when the compact Record view is resized."); audio_setup_note.setObjectName("AppSubtitle"); spl.addWidget(audio_setup_note)
         grid = QGridLayout(); grid.setHorizontalSpacing(14); grid.setVerticalSpacing(8)
+        self.system_input_combo = QComboBox(); self.system_input_combo.setObjectName("SystemInputDeviceCombo")
         self.output_combo = QComboBox(); self.sample_combo = QComboBox(); self.sample_combo.addItems(["48000","96000"]); self.channels_spin = QSpinBox(); self.channels_spin.setRange(1,self.MAX_TRACK_ROWS); self.channels_spin.setValue(4); self.buffer_combo=QComboBox(); self.buffer_combo.addItems(["256","512","1024"]); self.buffer_combo.setCurrentText("512"); self.preroll_spin=QDoubleSpinBox(); self.preroll_spin.setRange(0.0,10.0); self.preroll_spin.setSingleStep(1.0); self.preroll_spin.setSuffix(" sec"); self.preroll_spin.setValue(5.0)
-        fields=(("OUTPUT DEVICE",self.output_combo),("SAMPLE RATE",self.sample_combo),("INPUT CHANNELS",self.channels_spin),("BUFFER",self.buffer_combo),("PRE-ROLL",self.preroll_spin))
+        fields=(("INPUT DEVICE",self.system_input_combo),("OUTPUT DEVICE",self.output_combo),("SAMPLE RATE",self.sample_combo),("INPUT CHANNELS",self.channels_spin),("BUFFER",self.buffer_combo),("PRE-ROLL",self.preroll_spin))
         for i,(name,w) in enumerate(fields):
             lab=QLabel(name); lab.setObjectName("FieldLabel"); grid.addWidget(lab,(i//2)*2,i%2); grid.addWidget(w,(i//2)*2+1,i%2)
         spl.addLayout(grid)
-        ab=QHBoxLayout(); refresh_button=QPushButton("Refresh Devices"); refresh_button.clicked.connect(self._load_devices); ab.addWidget(refresh_button); ab.addStretch(1); spl.addLayout(ab)
+        ab=QHBoxLayout(); refresh_button=QPushButton("Refresh Devices"); _button_icon(refresh_button,"refresh"); refresh_button.clicked.connect(self._load_devices); self.system_apply_audio_button=QPushButton("Start / Apply Audio"); _button_icon(self.system_apply_audio_button,"play"); self.system_apply_audio_button.setProperty("role","primary"); self.system_apply_audio_button.clicked.connect(self.apply_audio); ab.addWidget(refresh_button); ab.addWidget(self.system_apply_audio_button); ab.addStretch(1); spl.addLayout(ab)
         diag_box=QFrame(); diag_box.setObjectName("DiagnosticsPanel"); dg=QGridLayout(diag_box); dg.setContentsMargins(14,12,14,12)
         self.diag_audio=QLabel("Not configured"); self.diag_xruns=QLabel("0"); self.diag_drops=QLabel("0"); self.diag_queue=QLabel("0%"); self.diag_disk=QLabel("--"); self.diag_remote=QLabel("--")
         for i,(name,val) in enumerate((("Audio",self.diag_audio),("XRUNs",self.diag_xruns),("Dropped blocks",self.diag_drops),("Writer queue",self.diag_queue),("Disk",self.diag_disk),("Remote",self.diag_remote))):
             key=QLabel(name.upper()); key.setObjectName("FieldLabel"); val.setObjectName("DiagnosticValue"); dg.addWidget(key,i,0); dg.addWidget(val,i,1)
         spl.addWidget(diag_box)
-        sysb=QHBoxLayout(); report=QPushButton("Open Sound Report"); report.clicked.connect(self.open_sound_report); save=QPushButton("Save Diagnostics"); save.clicked.connect(self.save_diagnostics); sysb.addWidget(report); sysb.addWidget(save); sysb.addStretch(1); spl.addLayout(sysb); spl.addStretch(1)
+        sysb=QHBoxLayout(); report=QPushButton("Open Sound Report"); _button_icon(report,"report"); report.clicked.connect(self.open_sound_report); save=QPushButton("Save Diagnostics"); _button_icon(save,"diagnostics"); save.clicked.connect(self.save_diagnostics); sysb.addWidget(report); sysb.addWidget(save); sysb.addStretch(1); spl.addLayout(sysb); spl.addStretch(1)
         self.workspace.addTab(system_page,"System")
 
         self._metadata_controls=[self.roll_edit,self.scene_edit,self.take_spin,self.fps_combo]
-        self._audio_controls=[self.input_combo,self.output_combo,self.sample_combo,self.channels_spin,self.buffer_combo,self.preroll_spin,self.apply_audio_button]
+        self._audio_controls=[self.input_combo,self.system_input_combo,self.output_combo,self.sample_combo,self.channels_spin,self.buffer_combo,self.preroll_spin,self.apply_audio_button,self.system_apply_audio_button]
         self.roll_edit.textChanged.connect(self._update_preview); self.scene_edit.textChanged.connect(self._update_preview); self.take_spin.valueChanged.connect(self._update_preview); self.fps_combo.currentTextChanged.connect(self._save_settings)
         self.channels_spin.valueChanged.connect(self._set_track_visibility); self.channels_spin.valueChanged.connect(lambda value: self.input_summary.setText(f"{value} INPUTS")); self.channels_spin.valueChanged.connect(lambda value: self.quick_inputs.setText(f"IN {value}/{value}"))
-        self.sample_combo.currentTextChanged.connect(lambda value: self.format_label.setText(f"{int(value)//1000} kHz · 24-bit · POLY WAV")); self.buffer_combo.currentTextChanged.connect(lambda value: self.quick_buffer.setText(f"BUF {value}")); self.preroll_spin.valueChanged.connect(lambda value: self.quick_preroll.setText(f"PRE {value:g}s")); self.input_combo.currentIndexChanged.connect(self._input_device_changed)
+        self.sample_combo.currentTextChanged.connect(lambda value: self.format_label.setText(f"{int(value)//1000} kHz · 24-bit · POLY WAV")); self.buffer_combo.currentTextChanged.connect(lambda value: self.quick_buffer.setText(f"BUF {value}")); self.preroll_spin.valueChanged.connect(lambda value: self.quick_preroll.setText(f"PRE {value:g}s")); self.input_combo.currentIndexChanged.connect(lambda _i: self._sync_input_device(self.input_combo)); self.system_input_combo.currentIndexChanged.connect(lambda _i: self._sync_input_device(self.system_input_combo))
         self.workspace.currentChanged.connect(lambda i: [b.setChecked(n==i) for n,b in enumerate(self.nav_buttons)])
         self._update_preview()
 
@@ -508,10 +559,10 @@ class MainWindow(QMainWindow):
     def _load_devices(self) -> None:
         saved_input = str(self.settings.value("audio/input_name", ""))
         saved_output = str(self.settings.value("audio/output_name", ""))
-        self.input_combo.blockSignals(True)
-        self.output_combo.blockSignals(True)
-        self.input_combo.clear()
-        self.output_combo.clear()
+        input_selectors = [self.input_combo, self.system_input_combo]
+        for combo in input_selectors + [self.output_combo]:
+            combo.blockSignals(True)
+            combo.clear()
         try:
             hostapis = AudioEngine.hostapis()
             self._devices_cache = AudioEngine.devices()
@@ -521,7 +572,8 @@ class MainWindow(QMainWindow):
                 host = hostapis[device.hostapi]["name"] if device.hostapi < len(hostapis) else "Host"
                 label = f"{device.name}  [{host}]"
                 if device.max_input_channels > 0:
-                    self.input_combo.addItem(label, device.index)
+                    for combo in input_selectors:
+                        combo.addItem(label, device.index)
                     idx = self.input_combo.count() - 1
                     upper = device.name.upper()
                     if saved_input and saved_input == label:
@@ -537,17 +589,38 @@ class MainWindow(QMainWindow):
                     elif best_output < 0 and ("UMC404" in upper or "UMC 404" in upper):
                         best_output = idx
             if best_input >= 0:
-                self.input_combo.setCurrentIndex(best_input)
+                for combo in input_selectors:
+                    combo.setCurrentIndex(best_input)
+            elif self.input_combo.count() > 0:
+                for combo in input_selectors:
+                    combo.setCurrentIndex(0)
             if best_output >= 0:
                 self.output_combo.setCurrentIndex(best_output)
-            self.status_text.setText(f"Found {self.input_combo.count()} input device(s).")
+            elif self.output_combo.count() > 0:
+                self.output_combo.setCurrentIndex(0)
+            self.status_text.setText(f"Found {self.input_combo.count()} input device(s). Select one and choose Start / Apply Audio.")
         except Exception as exc:
             LOGGER.exception("Audio device enumeration failed")
             QMessageBox.critical(self, "Audio Device Error", str(exc))
         finally:
-            self.input_combo.blockSignals(False)
-            self.output_combo.blockSignals(False)
+            for combo in input_selectors + [self.output_combo]:
+                combo.blockSignals(False)
         self._input_device_changed()
+
+    def _sync_input_device(self, source: QComboBox) -> None:
+        data = source.currentData()
+        if data is None:
+            return
+        for combo in (self.input_combo, self.system_input_combo):
+            if combo is source:
+                continue
+            target = combo.findData(data)
+            if target >= 0 and combo.currentIndex() != target:
+                combo.blockSignals(True)
+                combo.setCurrentIndex(target)
+                combo.blockSignals(False)
+        self._input_device_changed()
+        self._save_settings()
 
     def _input_device_changed(self) -> None:
         data = self.input_combo.currentData()
@@ -560,6 +633,7 @@ class MainWindow(QMainWindow):
                 self.channels_spin.setMaximum(min(self.MAX_TRACK_ROWS, max(1, device.max_input_channels)))
                 if self.channels_spin.value() > device.max_input_channels:
                     self.channels_spin.setValue(device.max_input_channels)
+                self.device_hint.setText(f"{device.max_input_channels} input channel(s) available on {device.name}.")
         except Exception:
             pass
 

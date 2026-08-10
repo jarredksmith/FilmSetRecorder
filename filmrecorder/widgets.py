@@ -3,8 +3,8 @@ from __future__ import annotations
 import math
 import time
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -41,18 +41,46 @@ class Card(QFrame):
         return self._layout
 
 
-class StatusPill(QLabel):
-    def __init__(self, text: str = "", tone: str = "neutral", parent=None):
-        super().__init__(text, parent)
-        self.setAlignment(Qt.AlignCenter)
-        self.setMinimumHeight(30)
-        self.setContentsMargins(12, 0, 12, 0)
+class StatusPill(QFrame):
+    """Compact status card with a real product icon and text.
+
+    Kept API-compatible with the old QLabel-based StatusPill so the recorder
+    state code can continue to call setText()/set_tone().
+    """
+    def __init__(self, text: str = "", tone: str = "neutral", icon: QIcon | None = None, parent=None):
+        super().__init__(parent)
+        self.setObjectName("StatusPill")
+        self.setMinimumHeight(42)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 5, 11, 5)
+        layout.setSpacing(7)
+        self.icon_label = QLabel()
+        self.icon_label.setObjectName("StatusPillIcon")
+        self.icon_label.setFixedSize(20, 20)
+        self.icon_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.icon_label)
+        self.text_label = QLabel(text)
+        self.text_label.setObjectName("StatusPillText")
+        self.text_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.text_label)
+        if icon is not None and not icon.isNull():
+            self.icon_label.setPixmap(icon.pixmap(QSize(18, 18)))
         self.set_tone(tone)
+
+    def setText(self, text: str) -> None:
+        self.text_label.setText(text)
+
+    def text(self) -> str:
+        return self.text_label.text()
 
     def set_tone(self, tone: str) -> None:
         self.setProperty("tone", tone)
         self.style().unpolish(self)
         self.style().polish(self)
+        for child in (self.icon_label, self.text_label):
+            child.style().unpolish(child)
+            child.style().polish(child)
+        self.update()
 
 
 class PeakMeter(QWidget):
@@ -216,10 +244,13 @@ class TrackRow(QFrame):
 
 
 class TransportButton(QPushButton):
-    def __init__(self, text: str, role: str = "secondary", parent=None):
+    def __init__(self, text: str, role: str = "secondary", icon: QIcon | None = None, parent=None):
         super().__init__(text, parent)
         self.setProperty("role", role)
         self.setMinimumHeight(64)
+        if icon is not None and not icon.isNull():
+            self.setIcon(icon)
+            self.setIconSize(QSize(28, 28))
         font = QFont(self.font())
         font.setBold(True)
         font.setPointSize(11)

@@ -16,6 +16,7 @@ analysis = Analysis(
         (str(project_root / 'assets' / 'icon.png'), 'assets'),
         (str(project_root / 'assets' / 'icon.svg'), 'assets'),
         (str(project_root / 'assets' / 'icon.icns'), 'assets'),
+        (str(project_root / 'assets' / 'icons'), 'assets/icons'),
         (str(project_root / 'web'), 'web'),
     ],
     hiddenimports=soundfile_hidden + sounddevice_hidden,

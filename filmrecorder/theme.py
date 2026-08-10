@@ -25,12 +25,15 @@ QWidget#NavRail { background:#050D16; border-right:1px solid #16304A; }
 QLabel#LogoMark { color:#2D8CFF; font-size:31px; font-weight:900; background:transparent; }
 QLabel#BrandWave { color:#3797FF; font-size:18px; font-weight:900; background:transparent; }
 QLabel#NavHelp { color:#6F8298; font-size:10px; background:transparent; }
-QPushButton#NavButton {
+QToolButton#NavHelpButton { background:transparent; color:#71869B; border:1px solid transparent; padding:6px 2px; font-size:9px; }
+QToolButton#NavHelpButton:hover { color:#EAF2FA; background:#0B1C2D; border-color:#19344D; border-radius:8px; }
+QLabel#SectionIcon { background:transparent; border:0; }
+QToolButton#NavButton {
     background:transparent; color:#7D8CA0; border:1px solid transparent;
     border-radius:8px; padding:7px 3px; font-size:10px; font-weight:700;
 }
-QPushButton#NavButton:hover { background:#0B1C2D; color:#D9E8F6; }
-QPushButton#NavButton:checked { background:#0B2B52; color:#F4FAFF; border-color:#1483FF; }
+QToolButton#NavButton:hover { background:#0B1C2D; color:#D9E8F6; }
+QToolButton#NavButton:checked { background:#0B2B52; color:#F4FAFF; border-color:#1483FF; }
 
 QLabel#AppTitle { color:#F5FAFF; font-size:17px; font-weight:750; letter-spacing:2px; background:transparent; }
 QLabel#AppSubtitle { color:#7F91A5; font-size:11px; background:transparent; }
@@ -56,15 +59,19 @@ QFrame#LastTakeStrip { background:#081522; }
 QSplitter::handle { background:#0D2031; }
 QSplitter::handle:hover { background:#1B4262; }
 
-QLabel[tone="neutral"], QLabel[tone="ready"], QLabel[tone="recording"], QLabel[tone="warning"], QLabel[tone="danger"] {
-    background:#0A1724; border:1px solid #203C55; border-radius:8px; padding:7px 11px;
-    font-size:9px; font-weight:800; letter-spacing:.5px;
+QFrame#StatusPill[tone="neutral"], QFrame#StatusPill[tone="ready"], QFrame#StatusPill[tone="recording"], QFrame#StatusPill[tone="warning"], QFrame#StatusPill[tone="danger"] {
+    background:#0A1724; border:1px solid #203C55; border-radius:8px;
 }
-QLabel[tone="neutral"] { color:#9FB1C3; }
-QLabel[tone="ready"] { color:#73E6A7; border-color:#155D3A; background:#08291D; }
-QLabel[tone="recording"] { color:#FF9C9C; border-color:#7B2930; background:#351015; }
-QLabel[tone="warning"] { color:#FFD179; border-color:#775A24; }
-QLabel[tone="danger"] { color:#FF9696; border-color:#8A3037; }
+QLabel#StatusPillText { background:transparent; border:0; color:#9FB1C3; font-size:9px; font-weight:800; letter-spacing:.5px; }
+QLabel#StatusPillIcon { background:transparent; border:0; }
+QFrame#StatusPill[tone="ready"] { border-color:#155D3A; background:#08291D; }
+QFrame#StatusPill[tone="ready"] QLabel#StatusPillText { color:#73E6A7; }
+QFrame#StatusPill[tone="recording"] { border-color:#7B2930; background:#351015; }
+QFrame#StatusPill[tone="recording"] QLabel#StatusPillText { color:#FF9C9C; }
+QFrame#StatusPill[tone="warning"] { border-color:#775A24; }
+QFrame#StatusPill[tone="warning"] QLabel#StatusPillText { color:#FFD179; }
+QFrame#StatusPill[tone="danger"] { border-color:#8A3037; }
+QFrame#StatusPill[tone="danger"] QLabel#StatusPillText { color:#FF9696; }
 
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit {
     background:#07131F; color:#EEF6FD; border:1px solid #253E56; border-radius:6px; padding:8px 10px;
@@ -116,4 +123,9 @@ QHeaderView::section { background:#0B1A28; color:#7994AE; border:0; border-botto
 QTableWidget::item { border-bottom:1px solid #142B3E; padding:7px; }
 
 QTabWidget#WorkspaceTabs::pane { border:0; background:transparent; }
+
+QComboBox#InputDeviceCombo, QComboBox#SystemInputDeviceCombo {
+    border-color:#2E6C9F; background:#081A2A; font-weight:700; min-height:24px;
+}
+QComboBox#InputDeviceCombo:focus, QComboBox#SystemInputDeviceCombo:focus { border-color:#39A2FF; }
 """

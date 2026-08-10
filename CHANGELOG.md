@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.3
+
+- Added a packaged 27-icon FilmSet UI icon set used throughout desktop navigation, section headers, status cards, transport, take tools, remote controls, and system actions.
+- Replaced text/glyph navigation placeholders with real graphical icons.
+- Added an explicit Input Device selector to the System & Audio Setup workspace in addition to the Record workspace selector.
+- Synchronized both input-device selectors and made UMC404HD auto-selection visible in either workspace.
+- Added Start / Apply Audio to the System workspace so audio routing can be configured even on compact window layouts.
+- Updated Windows packaging to include the full UI icon asset directory.
+
+
+## 0.6.2
+- Rebuilt app icon assets with a visible electric-blue waveform at small sizes.
+- Unified Windows, macOS, desktop-window, and web-remote product graphics.
+- Added icon regression tests.
+- Desktop header now uses the real product mark.
+
+
 ## 0.6.1
 
 - Fixed v0.6 startup crash (`QFrame` missing from the QtWidgets import list).

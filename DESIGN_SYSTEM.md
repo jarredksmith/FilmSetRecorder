@@ -44,3 +44,9 @@ The product mark is a compact vertical waveform in electric blue on a deep blue-
 ## Metering
 
 Meters are segmented and calibrated from -60 to 0 dBFS with peak hold and clip latch. Signal colors move from cyan/green to yellow and red only as level approaches clipping.
+
+## Iconography (0.6.3+)
+
+FilmSet uses a dedicated product icon set in `assets/icons/`. Icons are functional, not decorative: navigation, transport, recorder health, audio routing, file actions, remote pairing and diagnostics all use the same restrained line language. Avoid replacing these with emoji, Unicode glyphs, or platform-dependent symbol fonts.
+
+The icon set is rasterized with transparency so it packages consistently on both Windows and macOS through PyInstaller.

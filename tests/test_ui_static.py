@@ -34,3 +34,18 @@ class UIStaticTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class RecorderRoutingStaticTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(__file__).resolve().parents[1]
+        self.source = (self.root / 'filmrecorder' / 'main_window.py').read_text(encoding='utf-8')
+
+    def test_input_device_is_exposed_in_record_and_system_workspaces(self):
+        self.assertIn('self.input_combo = QComboBox()', self.source)
+        self.assertIn('self.system_input_combo = QComboBox()', self.source)
+        self.assertIn('("INPUT DEVICE",self.system_input_combo)', self.source)
+        self.assertIn('def _sync_input_device', self.source)
+
+    def test_real_ui_icons_are_referenced(self):
+        for name in ('record','takes','notes','remote','system','slate','tracks','stop','play','next','circle'):
+            self.assertIn(f'"{name}"', self.source)
