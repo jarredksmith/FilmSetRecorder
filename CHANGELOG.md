@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- Added a responsive phone/tablet web remote served directly by FilmSet Recorder.
+- Added one-scan QR pairing from the desktop GUI, with manual six-digit PIN fallback.
+- Added browser session cookies so paired devices do not need the PIN on every refresh.
+- Added live mobile meters, recording clock, roll/scene/take slate, transport, circle, scene/take editing, disk status, XRUNs, and drop counters.
+- Preserved backward compatibility with the ESP32 `/status` and `/command` API.
+- Added web-asset packaging to Windows/macOS builds.
+- Added automated tests for static web serving and browser pairing.
+- Changed Windows installer artifact upload to a wildcard path so version filename changes do not silently lose the artifact.
+
 ## 0.2.0
 
 - New modern PySide6 user interface

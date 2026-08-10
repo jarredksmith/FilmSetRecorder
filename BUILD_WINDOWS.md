@@ -10,9 +10,9 @@ You do **not** need Python on the recording PC.
 4. Click **Run workflow**.
 5. Wait for the Windows build to finish with a green check mark.
 6. Open the completed run.
-7. Under **Artifacts**, download `FilmSetRecorder-Windows-Installer-v0.2.0`.
+7. Under **Artifacts**, download `FilmSetRecorder-Windows-Installer-v0.3.0`.
 8. Unzip the artifact.
-9. Run `FilmSetRecorder_Setup_0.2.0.exe`.
+9. Run `FilmSetRecorder_Setup_0.3.0.exe`.
 
 The workflow runs unit tests, compiles the Python source, builds the application with PyInstaller, creates the installer with Inno Setup, and uploads both installer and portable artifacts.
 
@@ -27,5 +27,5 @@ powershell -ExecutionPolicy Bypass -File .\build-windows.ps1
 The completed installer is placed in:
 
 ```text
-release\FilmSetRecorder_Setup_0.2.0.exe
+release\FilmSetRecorder_Setup_0.3.0.exe
 ```

@@ -52,3 +52,15 @@
 - PDF daily sound report
 - MIDI / HID controller support
 - richer ESP32 handheld UI with meter page, slate page, battery indication, and setup screen
+
+## 0.3 - Local web remote
+
+- [x] responsive phone/tablet remote
+- [x] local HTTP server bundled into desktop app
+- [x] QR instant pairing
+- [x] browser pairing sessions
+- [x] live meters and transport controls
+- [x] ESP32 API compatibility
+- [ ] optional HTTPS / installable full PWA mode
+- [ ] connected-device management panel
+- [ ] richer take notes and track-arm controls on web remote

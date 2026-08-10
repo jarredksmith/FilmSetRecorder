@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import logging
 import platform
@@ -11,13 +12,15 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+import qrcode
 import soundfile as sf
 from PySide6.QtCore import QSettings, QStandardPaths, QTimer, Qt, QUrl
-from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QShortcut
+from PySide6.QtGui import QAction, QDesktopServices, QIcon, QImage, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
     QDoubleSpinBox,
     QFileDialog,
     QGridLayout,
@@ -106,6 +109,7 @@ class MainWindow(QMainWindow):
             token = f"{secrets.randbelow(1_000_000):06d}"
             self.settings.setValue("remote/token", token)
         self.remote_token = token
+        self.remote_address = ""
 
         self._build_menu()
         self._build_ui()
@@ -330,6 +334,29 @@ class MainWindow(QMainWindow):
         self.notes.setMinimumHeight(130)
         notes_card.body.addWidget(self.notes)
         right_layout.addWidget(notes_card)
+
+        remote_card = Card("REMOTE CONTROL", "Phone, tablet, or ESP32")
+        self.remote_url_label = QLabel("Starting remote server...")
+        self.remote_url_label.setObjectName("TakePreview")
+        self.remote_url_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        remote_card.body.addWidget(self.remote_url_label)
+        self.remote_pin_label = QLabel(f"PAIRING CODE   {self.remote_token}")
+        self.remote_pin_label.setObjectName("FieldLabel")
+        remote_card.body.addWidget(self.remote_pin_label)
+        remote_help = QLabel("Scan the QR code from a phone on the same Wi-Fi network for instant pairing. The six-digit code is available for manual pairing.")
+        remote_help.setObjectName("Muted")
+        remote_help.setWordWrap(True)
+        remote_card.body.addWidget(remote_help)
+        remote_buttons = QHBoxLayout()
+        qr_button = QPushButton("Show QR Code")
+        qr_button.setProperty("role", "accent")
+        qr_button.clicked.connect(self.show_remote_qr)
+        open_remote_button = QPushButton("Open Web Remote")
+        open_remote_button.clicked.connect(self.open_web_remote)
+        remote_buttons.addWidget(qr_button, 1)
+        remote_buttons.addWidget(open_remote_button, 1)
+        remote_card.body.addLayout(remote_buttons)
+        right_layout.addWidget(remote_card)
 
         diagnostic_card = Card("SYSTEM", "Recorder health")
         diag_grid = QGridLayout()
@@ -952,17 +979,87 @@ class MainWindow(QMainWindow):
             command_sink=self._enqueue_remote_command,
             state_provider=self.remote_state,
             token=self.remote_token,
+            web_root=resource_path("web"),
         )
         try:
             self.controller_server.start(port=8765)
-            address = f"{_local_ip()}:8765"
+            ip = _local_ip()
+            address = f"{ip}:8765"
+            self.remote_address = f"http://{address}"
             self.remote_pill.setText(f"REMOTE {address}")
             self.remote_pill.set_tone("ready")
             self.diag_remote.setText(f"{address} / PIN {self.remote_token}")
+            if hasattr(self, "remote_url_label"):
+                self.remote_url_label.setText(self.remote_address)
+            if hasattr(self, "remote_pin_label"):
+                self.remote_pin_label.setText(f"PAIRING CODE   {self.remote_token}")
         except OSError as exc:
             self.remote_pill.setText("REMOTE OFF")
             self.remote_pill.set_tone("warning")
             self.diag_remote.setText(str(exc))
+            self.remote_address = ""
+            if hasattr(self, "remote_url_label"):
+                self.remote_url_label.setText("Remote server unavailable")
+
+    def show_remote_qr(self) -> None:
+        if not self.remote_address:
+            QMessageBox.warning(self, "Remote unavailable", "The local remote server is not currently running.")
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("FilmSet Recorder Remote")
+        dialog.setMinimumWidth(410)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(12)
+
+        heading = QLabel("SCAN TO OPEN REMOTE")
+        heading.setObjectName("FieldLabel")
+        heading.setAlignment(Qt.AlignCenter)
+        layout.addWidget(heading)
+
+        qr = qrcode.QRCode(version=None, box_size=8, border=2)
+        qr.add_data(f"{self.remote_address}/#pin={self.remote_token}")
+        qr.make(fit=True)
+        image = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        qimage = QImage.fromData(buffer.getvalue(), "PNG")
+        qr_label = QLabel()
+        qr_label.setAlignment(Qt.AlignCenter)
+        qr_label.setPixmap(QPixmap.fromImage(qimage).scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        layout.addWidget(qr_label)
+
+        url_label = QLabel(self.remote_address)
+        url_label.setAlignment(Qt.AlignCenter)
+        url_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        url_label.setObjectName("TakePreview")
+        layout.addWidget(url_label)
+
+        pin_title = QLabel("PAIRING CODE")
+        pin_title.setObjectName("FieldLabel")
+        pin_title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(pin_title)
+        pin_label = QLabel(self.remote_token)
+        pin_label.setAlignment(Qt.AlignCenter)
+        pin_label.setStyleSheet("font-size: 34px; font-weight: 800; letter-spacing: 8px;")
+        layout.addWidget(pin_label)
+
+        help_label = QLabel("Connect the phone to the same Wi-Fi network and scan the code for instant pairing. Anyone who scans this QR code can control the recorder while it is visible.")
+        help_label.setObjectName("Muted")
+        help_label.setWordWrap(True)
+        help_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(help_label)
+
+        close_button = QPushButton("Done")
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(close_button)
+        dialog.exec()
+
+    def open_web_remote(self) -> None:
+        if not self.remote_address:
+            QMessageBox.warning(self, "Remote unavailable", "The local remote server is not currently running.")
+            return
+        QDesktopServices.openUrl(QUrl(self.remote_address))
 
     def _enqueue_remote_command(self, payload: dict) -> None:
         try:
@@ -992,6 +1089,15 @@ class MainWindow(QMainWindow):
                 pass
 
     def _refresh_remote_state_cache(self) -> None:
+        try:
+            free = self.session.disk_free_bytes()
+            gb = free / (1024 ** 3)
+            channels = self.audio.channels if self.audio.stream is not None else self.channels_spin.value()
+            sample_rate = self.audio.sample_rate if self.audio.stream is not None else int(self.sample_combo.currentText())
+            remaining = self.session.estimated_record_seconds(sample_rate, channels)
+            disk_display = f"{gb:.1f} GB / {format_duration(remaining)}"
+        except Exception:
+            disk_display = "Unavailable"
         state = {
             "version": APP_VERSION,
             "recording": self.audio.recording,
@@ -1009,6 +1115,9 @@ class MainWindow(QMainWindow):
             "tracks": self._track_names(self.channels_spin.value()),
             "armed": self._armed_states(self.channels_spin.value()),
             "project": self.session.project_name,
+            "audio_ready": self.audio.stream is not None,
+            "disk_display": disk_display,
+            "remote_url": self.remote_address,
         }
         with self._remote_state_lock:
             self._remote_state_cache = state

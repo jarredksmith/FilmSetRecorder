@@ -1,10 +1,44 @@
-# FilmSet Recorder 0.2.0
+# FilmSet Recorder 0.3.0
 
 FilmSet Recorder is a cross-platform multitrack production-dialogue recorder built for film sets. The desktop application is written in Python/PySide6 and is designed around a field-recorder workflow rather than a general-purpose DAW.
 
-> **Engineering build:** 0.2.0 is intended for development and hardware validation. Do not use it as the only recorder for irreplaceable production audio until the stress-test checklist has been completed on the exact computer, interface, storage device, and sample-rate configuration you will use on set.
+> **Engineering build:** 0.3.0 is intended for development and hardware validation. Do not use it as the only recorder for irreplaceable production audio until the stress-test checklist has been completed on the exact computer, interface, storage device, and sample-rate configuration you will use on set.
 
-## What is new in 0.2
+
+## New in 0.3 - Phone / tablet web remote
+
+FilmSet Recorder now serves a responsive remote-control web app directly from the recorder computer. No phone app, cloud account, or internet connection is required. Put the recorder and phone/tablet on the same local Wi-Fi network, open the **REMOTE CONTROL** card in FilmSet Recorder, and choose **Show QR Code**.
+
+The QR code contains the local recorder address plus a pairing code in the URL fragment. The fragment is not sent in the HTTP request; the browser reads it locally, pairs with the recorder, and immediately removes it from browser history. Manual six-digit PIN pairing remains available.
+
+The mobile remote provides:
+
+- Record / Stop / Play Last
+- Next Take and Circle Take
+- editable Scene and Take values while not recording
+- live roll / scene / take slate
+- running record timer
+- live input meters and track names
+- interface ready/offline state
+- disk capacity / estimated recording time
+- XRUN and dropped-block counters
+- automatic offline/reconnect indication
+- remembered browser pairing for up to 24 hours of inactivity
+
+The existing ESP32 API remains compatible. The ESP32 can continue using `/status` and `/command` with the `X-FilmRec-Token` header while phones use browser-session pairing.
+
+### Quick phone setup
+
+1. Start FilmSet Recorder on the laptop.
+2. Make sure the laptop and phone are on the same Wi-Fi network. Internet access is not required.
+3. In FilmSet Recorder, click **Show QR Code** in the Remote Control card.
+4. Scan the QR code with the phone camera.
+5. The browser opens and pairs automatically.
+6. Test **Next Take** or **Circle** before using remote Record/Stop on a real take.
+
+If the phone cannot open the page, allow FilmSet Recorder through Windows Defender Firewall for **Private networks** and verify that client isolation is disabled on the Wi-Fi access point.
+
+## Recorder foundation from 0.2
 
 - Completely redesigned modern dark GUI
 - Large production slate and transport controls
@@ -91,13 +125,13 @@ The repository includes:
 Open **Actions -> Build Windows Installer -> Run workflow**. After the workflow succeeds, download the artifact:
 
 ```text
-FilmSetRecorder-Windows-Installer-v0.2.0
+FilmSetRecorder-Windows-Installer-v0.3.0
 ```
 
 Inside it is:
 
 ```text
-FilmSetRecorder_Setup_0.2.0.exe
+FilmSetRecorder_Setup_0.3.0.exe
 ```
 
 The target recording PC does not need Python installed. It still needs the appropriate audio-interface driver.
@@ -110,7 +144,7 @@ The repository also includes:
 .github/workflows/build-macos.yml
 ```
 
-Run **Build macOS App** and download the `FilmSetRecorder-macOS-v0.2.0` artifact. The generated app is not Apple-notarized or Developer-ID signed yet, so Gatekeeper warnings are expected on development builds.
+Run **Build macOS App** and download the `FilmSetRecorder-macOS-v0.3.0` artifact. The generated app is not Apple-notarized or Developer-ID signed yet, so Gatekeeper warnings are expected on development builds.
 
 ## ESP32 Cheap Yellow Display remote
 

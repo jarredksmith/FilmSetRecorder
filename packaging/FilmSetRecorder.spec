@@ -2,7 +2,7 @@
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
 
-project_root = Path(SPECPATH).resolve().parent
+project_root = Path(SPECPATH).resolve().parent.parent
 
 soundfile_datas, soundfile_bins, soundfile_hidden = collect_all('soundfile')
 sounddevice_datas, sounddevice_bins, sounddevice_hidden = collect_all('sounddevice')
@@ -16,6 +16,7 @@ analysis = Analysis(
         (str(project_root / 'assets' / 'icon.png'), 'assets'),
         (str(project_root / 'assets' / 'icon.svg'), 'assets'),
         (str(project_root / 'assets' / 'icon.icns'), 'assets'),
+        (str(project_root / 'web'), 'web'),
     ],
     hiddenimports=soundfile_hidden + sounddevice_hidden,
     hookspath=[],
