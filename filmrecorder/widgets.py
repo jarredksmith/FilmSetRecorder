@@ -251,7 +251,9 @@ class PeakMeter(QWidget):
 
 
 class WaveformWidget(QWidget):
-    """Compact production waveform with playback playhead."""
+    """Compact production waveform with playback playhead and click/drag scrubbing."""
+
+    seekRequested = Signal(float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -263,6 +265,9 @@ class WaveformWidget(QWidget):
         self.setObjectName("WaveformWidget")
         self.setMinimumHeight(150)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip("Click or drag across the waveform to scrub playback.")
+        self.setMouseTracking(True)
 
     def clear(self) -> None:
         self._mins = []
@@ -299,6 +304,35 @@ class WaveformWidget(QWidget):
     @property
     def position(self) -> float:
         return self._position
+
+
+    def _seconds_at_x(self, x: float) -> float:
+        if self._duration <= 0:
+            return 0.0
+        rect = QRectF(self.rect()).adjusted(1, 1, -1, -1)
+        inner = rect.adjusted(12, 12, -12, -12)
+        if inner.width() <= 0:
+            return 0.0
+        frac = max(0.0, min(1.0, (float(x) - inner.left()) / inner.width()))
+        return frac * self._duration
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton and self._duration > 0 and self._mins:
+            seconds = self._seconds_at_x(event.position().x())
+            self.set_position(seconds)
+            self.seekRequested.emit(seconds)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if event.buttons() & Qt.LeftButton and self._duration > 0 and self._mins:
+            seconds = self._seconds_at_x(event.position().x())
+            self.set_position(seconds)
+            self.seekRequested.emit(seconds)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
@@ -358,6 +392,7 @@ class WaveformWidget(QWidget):
 class TrackRow(QFrame):
     armedChanged = Signal(int, bool)
     nameChanged = Signal(int, str)
+    sourceChanged = Signal(int, int)
 
     def __init__(self, channel_index: int, name: str, parent=None):
         super().__init__(parent)
@@ -412,10 +447,13 @@ class TrackRow(QFrame):
         identity_footer.setContentsMargins(0, 0, 0, 0)
         identity_footer.setSpacing(6)
         identity_footer.addWidget(self.arm_button)
-        self.source_badge = QLabel(f"IN {channel_index + 1}")
-        self.source_badge.setObjectName("TrackSourceBadge")
-        self.source_badge.setToolTip("Physical interface input routed to this ISO track")
-        identity_footer.addWidget(self.source_badge)
+        self.source_combo = DeviceComboBox()
+        self.source_combo.setObjectName("TrackSourceCombo")
+        self.source_combo.setFixedWidth(88)
+        self.source_combo.setMinimumHeight(24)
+        self.source_combo.setToolTip("Choose the physical interface input routed to this ISO track")
+        self.source_combo.currentIndexChanged.connect(self._source_state_changed)
+        identity_footer.addWidget(self.source_combo)
         identity_footer.addStretch(1)
         ident_l.addLayout(identity_footer)
         row.addWidget(identity)
@@ -483,11 +521,36 @@ class TrackRow(QFrame):
         self.rms_label.setText(self._format_db(rms_db))
         self.clip_label.setVisible(db >= -0.1)
 
+    def set_source_options(self, options: list[tuple[str, int]], current: int = 0) -> None:
+        self.source_combo.blockSignals(True)
+        self.source_combo.clear()
+        for label, value in options:
+            self.source_combo.addItem(str(label), int(value))
+        found = self.source_combo.findData(int(current))
+        self.source_combo.setCurrentIndex(found if found >= 0 else (0 if self.source_combo.count() else -1))
+        self.source_combo.setEnabled(self.source_combo.count() > 1)
+        self.source_combo.blockSignals(False)
+
+    def set_source(self, source: int) -> None:
+        found = self.source_combo.findData(int(source))
+        if found >= 0 and found != self.source_combo.currentIndex():
+            self.source_combo.blockSignals(True)
+            self.source_combo.setCurrentIndex(found)
+            self.source_combo.blockSignals(False)
+
     def set_source_label(self, text: str) -> None:
-        self.source_badge.setText(str(text))
+        # Compatibility shim for older callers; the authoritative control is now the combo.
+        if self.source_combo.count() == 0:
+            self.source_combo.addItem(str(text), self.channel_index)
+
+    def _source_state_changed(self, _index: int) -> None:
+        data = self.source_combo.currentData()
+        if data is not None:
+            self.sourceChanged.emit(self.channel_index, int(data))
 
     def set_locked(self, locked: bool) -> None:
         self.arm_button.setEnabled(not locked)
+        self.source_combo.setEnabled((not locked) and self.source_combo.count() > 1)
         self.name_edit.setReadOnly(locked)
 
     def is_armed(self) -> bool:

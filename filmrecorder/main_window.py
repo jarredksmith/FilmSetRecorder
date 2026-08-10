@@ -472,6 +472,7 @@ class MainWindow(QMainWindow):
             row = TrackRow(index, default_names[index] if index < 4 else f"INPUT {index + 1}")
             row.armedChanged.connect(self._track_arm_changed)
             row.nameChanged.connect(self._track_name_changed)
+            row.sourceChanged.connect(self._quick_track_source_changed)
             self.track_rows.append(row)
             self.track_layout.addWidget(row)
             row.setVisible(index < 4)
@@ -799,6 +800,7 @@ class MainWindow(QMainWindow):
         til.addLayout(inspector_head)
 
         self.take_waveform = WaveformWidget()
+        self.take_waveform.seekRequested.connect(self._scrub_selected_take)
         til.addWidget(self.take_waveform, 1)
         playback_info = QHBoxLayout()
         self.take_playback_time = QLabel("00:00 / 00:00")
@@ -1572,10 +1574,13 @@ class MainWindow(QMainWindow):
             combo.blockSignals(False)
             if track_index < len(self.track_rows):
                 source_value = int(combo.currentData() or 0)
-                badge = f"IN {source_value + 1}"
-                if maximum == 2:
-                    badge += " L" if source_value == 0 else " R"
-                self.track_rows[track_index].set_source_label(badge)
+                quick_options = []
+                for source in range(maximum):
+                    short = f"IN {source + 1}"
+                    if maximum == 2:
+                        short += " L" if source == 0 else " R"
+                    quick_options.append((short, source))
+                self.track_rows[track_index].set_source_options(quick_options, source_value)
 
     def _track_name_changed(self, channel: int, name: str) -> None:
         if hasattr(self, "route_row_widgets") and 0 <= channel < len(self.route_row_widgets):
@@ -1587,17 +1592,28 @@ class MainWindow(QMainWindow):
             return
         if 0 <= channel < len(self.route_source_combos):
             source = int(self.route_source_combos[channel].currentData() or 0)
-            maximum = max(1, int(getattr(self, "_selected_device_max_inputs", 1)))
-            badge = f"IN {source + 1}"
-            if maximum == 2:
-                badge += " L" if source == 0 else " R"
-            self.track_rows[channel].set_source_label(badge)
+            self.track_rows[channel].set_source(source)
         self._save_settings()
         if self.audio.stream is not None:
             # Re-open the input stream if the new route requires a different
             # hardware channel span. This keeps L/R and multi-input routing
             # immediately authoritative instead of waiting for a restart.
             self.apply_audio()
+
+    def _quick_track_source_changed(self, channel: int, source: int) -> None:
+        if self.audio.recording:
+            return
+        if not (0 <= channel < len(self.route_source_combos)):
+            return
+        combo = self.route_source_combos[channel]
+        found = combo.findData(int(source))
+        if found < 0:
+            return
+        if combo.currentIndex() != found:
+            combo.setCurrentIndex(found)
+        else:
+            # If the system combo was already there, still make the route authoritative.
+            self._track_source_changed(channel)
 
     def _record_trim_changed(self, channel: int, value: int) -> None:
         if hasattr(self, "route_trim_labels") and 0 <= channel < len(self.route_trim_labels):
@@ -1794,7 +1810,7 @@ class MainWindow(QMainWindow):
                 self._set_recorder_badge("READY", "ready")
                 self.status_text.setText("Playback stopped. Audio ready.")
 
-    def _play_path(self, path: Path) -> None:
+    def _play_path(self, path: Path, start_seconds: float = 0.0) -> None:
         if self.audio.recording:
             return
         path = Path(path)
@@ -1803,10 +1819,10 @@ class MainWindow(QMainWindow):
             return
         try:
             output = self.output_combo.currentData()
-            self.audio.play_file(path, int(output) if output is not None else None)
+            self.audio.play_file(path, int(output) if output is not None else None, start_seconds=start_seconds)
             self._playback_path = path.resolve()
             if hasattr(self, "take_waveform") and self._waveform_selected_path == self._playback_path:
-                self.take_waveform.set_position(0.0)
+                self.take_waveform.set_position(start_seconds)
             self.state_pill.setText("PLAYBACK")
             self.state_pill.set_tone("neutral")
             self._set_recorder_badge("PLAYBACK", "playback")
@@ -1814,6 +1830,24 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             LOGGER.exception("Playback failed")
             QMessageBox.critical(self, "Playback Error", str(exc))
+
+    def _scrub_selected_take(self, seconds: float) -> None:
+        if self.audio.recording or self._waveform_selected_path is None:
+            return
+        path = self._waveform_selected_path
+        try:
+            if self.audio.playing and self._playback_path == path:
+                actual = self.audio.seek_playback(seconds)
+            else:
+                self._play_path(path, start_seconds=seconds)
+                actual = float(seconds)
+            self.take_waveform.set_position(actual)
+            duration = self.take_waveform.duration or self.audio.playback_duration_seconds
+            self.take_playback_time.setText(f"{format_duration(actual)} / {format_duration(duration)}")
+            self.status_text.setText(f"Scrubbed {path.name} to {format_duration(actual)}.")
+        except Exception as exc:
+            LOGGER.warning("Could not scrub take playback: %s", exc)
+            self.status_text.setText(f"Could not scrub take: {exc}")
 
     def play_last(self) -> None:
         if not self.last_take_path or not self.last_take_path.exists():

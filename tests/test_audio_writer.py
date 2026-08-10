@@ -88,3 +88,8 @@ class AudioRoutingTrimTests(unittest.TestCase):
         engine._recording = True
         engine.set_record_trims_db([3.0, -4.5])
         self.assertEqual([round(x, 1) for x in engine.record_trims_db], [3.0, -4.5])
+
+
+def test_playback_seek_api_is_present():
+    from filmrecorder.audio_engine import AudioEngine
+    assert hasattr(AudioEngine, "seek_playback")

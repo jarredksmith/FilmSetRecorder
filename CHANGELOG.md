@@ -1,3 +1,9 @@
+## 0.7.1
+- Added click/drag waveform scrubbing and start-from-cursor playback.
+- Added per-ISO physical input selectors directly on the Record workspace.
+- Added phone-local waveform seeking.
+- Documented the polyphonic-WAV recording model.
+
 # Changelog
 
 ## 0.7.0

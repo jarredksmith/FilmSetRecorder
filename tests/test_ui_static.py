@@ -6,6 +6,11 @@ from pathlib import Path
 
 
 class UIStaticTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(__file__).resolve().parents[1]
+        self.main = (self.root / "filmrecorder" / "main_window.py").read_text(encoding="utf-8")
+        self.widgets = (self.root / "filmrecorder" / "widgets.py").read_text(encoding="utf-8")
+
     def test_qt_symbols_used_by_main_window_are_imported_or_defined(self):
         path = Path(__file__).resolve().parents[1] / "filmrecorder" / "main_window.py"
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -31,6 +36,16 @@ class UIStaticTests(unittest.TestCase):
         missing = sorted(qt_loads - imported - defined)
         self.assertEqual(missing, [], f"Qt symbols are used but not imported/defined: {missing}")
 
+
+    def test_take_waveform_is_scrubbable(self):
+        self.assertIn('seekRequested = Signal(float)', self.widgets)
+        self.assertIn('self.take_waveform.seekRequested.connect(self._scrub_selected_take)', self.main)
+        self.assertIn('self.audio.seek_playback(seconds)', self.main)
+
+    def test_record_workspace_has_per_track_source_selector(self):
+        self.assertIn('self.source_combo = DeviceComboBox()', self.widgets)
+        self.assertIn('row.sourceChanged.connect(self._quick_track_source_changed)', self.main)
+        self.assertIn('self.track_rows[track_index].set_source_options', self.main)
 
 if __name__ == "__main__":
     unittest.main()

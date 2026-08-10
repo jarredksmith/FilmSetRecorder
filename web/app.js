@@ -88,6 +88,22 @@
     const phoneActive=!phonePlayer.paused && !!phonePlayer.src; const remoteActive=!!lastState?.playing && lastState?.playback_file_id===selectedTakeId; const duration=phoneActive?(Number(phonePlayer.duration)||Number(waveform.duration_seconds)||0):(remoteActive?(Number(lastState.playback_duration)||Number(waveform.duration_seconds)||0):(Number(waveform.duration_seconds)||0)); const position=phoneActive?(Number(phonePlayer.currentTime)||0):(remoteActive?(Number(lastState.playback_elapsed)||0):0);if(duration>0){const x=Math.max(0,Math.min(w,position/duration*w));waveCtx.strokeStyle='#fff';waveCtx.lineWidth=2*(window.devicePixelRatio||1);waveCtx.beginPath();waveCtx.moveTo(x,0);waveCtx.lineTo(x,h);waveCtx.stroke();}
     $('waveTime').textContent=`${shortDuration(position)} / ${shortDuration(duration)}`;
   }
+
+  function scrubPhoneWaveform(event){
+    if(!waveform||!selectedTakeId)return;
+    const rect=waveCanvas.getBoundingClientRect();
+    const clientX=event.touches?.[0]?.clientX ?? event.clientX;
+    const frac=Math.max(0,Math.min(1,(clientX-rect.left)/Math.max(1,rect.width)));
+    const duration=Number(phonePlayer.duration)||Number(waveform.duration_seconds)||0;
+    if(duration<=0)return;
+    if(!phonePlayer.src){
+      const t=selectedTake(); if(!t)return;
+      phonePlayer.src=`/api/audio?id=${encodeURIComponent(t.id)}&v=${Date.now()}`;
+    }
+    phonePlayer.currentTime=frac*duration;
+    drawWaveform();
+  }
+
   async function loadWaveform(){waveform=null;lastWaveformTakeId=selectedTakeId;drawWaveform();if(!selectedTakeId||lastState?.recording)return;try{waveform=await jsonFetch(`/api/waveform?id=${encodeURIComponent(selectedTakeId)}`);drawWaveform();}catch(_){waveform=null;drawWaveform();}}
 
   async function listenOnPhone(){const t=selectedTake();if(!t)return;phonePlayer.pause();phonePlayer.currentTime=0;phonePlayer.src=`/api/audio?id=${encodeURIComponent(t.id)}&v=${Date.now()}`;$('phoneNowPlaying').textContent=`Loading ${t.file}…`;try{await phonePlayer.play();$('phoneNowPlaying').textContent=`Listening on phone: ${t.file}`;}catch(_){$('phoneNowPlaying').textContent=`Tap the audio play control for ${t.file}`;}}
@@ -98,6 +114,7 @@
   $('takeNotes').addEventListener('input',()=>{notesDirty=true;}); $('refreshTakes').addEventListener('click',loadTakes); $('playSelectedRecorder').addEventListener('click',()=>{if(selectedTakeId)command('play_take',{take_id:selectedTakeId});}); $('listenSelectedPhone').addEventListener('click',listenOnPhone); $('saveTakeNotes').addEventListener('click',saveTakeNotes);
   $('sceneBox').addEventListener('click',()=>{if(!lastState||lastState.recording)return;const v=prompt('Scene',lastState.scene||'');if(v!==null&&v.trim())command('set_scene',{scene:v.trim()});}); $('takeBox').addEventListener('click',()=>{if(!lastState||lastState.recording)return;const v=prompt('Take number',lastState.take||1),n=Number.parseInt(v,10);if(Number.isFinite(n)&&n>0)command('set_take',{take:n});});
   $('unpairButton').addEventListener('click',async()=>{try{await jsonFetch('/api/unpair',{method:'POST',body:'{}'});}catch(_){}requirePairing();});
+  waveCanvas.addEventListener('click',scrubPhoneWaveform); waveCanvas.addEventListener('touchstart',e=>{scrubPhoneWaveform(e);e.preventDefault();},{passive:false});
   phonePlayer.addEventListener('timeupdate',drawWaveform); phonePlayer.addEventListener('loadedmetadata',drawWaveform); phonePlayer.addEventListener('ended',()=>{$('phoneNowPlaying').textContent='Phone playback finished.';drawWaveform();}); window.addEventListener('resize',drawWaveform);
   (async()=>{const match=window.location.hash.match(/(?:^#|&)pin=(\d{6})(?:&|$)/);if(match){$('pinInput').value=match[1];history.replaceState(null,'',window.location.pathname+window.location.search);await pair();}try{const info=await jsonFetch('/api/info');$('projectName').textContent=info.project||'Remote Control';}catch(_){}await poll();if(paired)await loadTakes();})();
   setInterval(poll,200); setInterval(()=>{if(paired)loadTakes();},5000);

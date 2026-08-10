@@ -147,6 +147,9 @@ QLabel#MeterLabel { color:#718AA1; font-size:7px; font-weight:800; letter-spacin
 QLabel#MeterValue { color:#F3F8FC; font-family:"SF Mono",Consolas,monospace; font-size:10px; font-weight:700; background:transparent; }
 QLabel#MeterValueSecondary { color:#AFC2D3; font-family:"SF Mono",Consolas,monospace; font-size:9px; background:transparent; }
 QLabel#TrackSourceBadge { color:#7EA9C9; background:#0B1B29; border:1px solid #25445D; border-radius:4px; padding:2px 5px; font-size:7px; font-weight:800; }
+QComboBox#TrackSourceCombo { min-height:24px; max-height:24px; padding:2px 22px 2px 7px; background:#081723; border:1px solid #285273; border-radius:4px; color:#9FD2F7; font-size:8px; font-weight:800; }
+QComboBox#TrackSourceCombo:disabled { color:#72889A; border-color:#1B3448; background:#07131D; }
+QComboBox#TrackSourceCombo::drop-down { width:20px; }
 QLabel#ClipBadge { color:#FFF; background:#CB2635; border-radius:4px; font-size:8px; font-weight:900; }
 QPushButton#AddInputButton {
     background:transparent; color:#6FAFE3; border:1px dashed #2A5579; border-radius:7px;

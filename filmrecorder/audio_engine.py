@@ -77,6 +77,7 @@ class AudioEngine:
         self._play_stream: Optional[sd.OutputStream] = None
         self._play_file: Optional[sf.SoundFile] = None
         self._play_lock = threading.RLock()
+        self._play_io_lock = threading.RLock()
         self._playing = False
         self._play_frames_read = 0
         self._play_total_frames = 0
@@ -525,7 +526,7 @@ class AudioEngine:
             raise RuntimeError(error)
         return self.finalized_path
 
-    def play_file(self, path: Path, output_device: Optional[int] = None) -> None:
+    def play_file(self, path: Path, output_device: Optional[int] = None, start_seconds: float = 0.0) -> None:
         if self.recording:
             raise RuntimeError("Playback is disabled while recording.")
         self.stop_playback()
@@ -535,8 +536,12 @@ class AudioEngine:
 
         handle = sf.SoundFile(str(path), mode="r")
         try:
+            start_frame = max(0, min(int(handle.frames), int(max(0.0, float(start_seconds)) * int(handle.samplerate or 1))))
+            if start_frame:
+                with self._play_io_lock:
+                    handle.seek(start_frame)
             with self._play_lock:
-                self._play_frames_read = 0
+                self._play_frames_read = start_frame
                 self._play_total_frames = int(handle.frames)
                 self._play_sample_rate = int(handle.samplerate or 1)
             device_info = sd.query_devices(output_device, "output") if output_device is not None else sd.query_devices(kind="output")
@@ -548,10 +553,12 @@ class AudioEngine:
             def callback(outdata, frames, time_info, status):
                 if status:
                     LOGGER.warning("PortAudio playback status: %s", status)
-                data = handle.read(frames, dtype="float32", always_2d=True)
-                count = len(data)
+                with self._play_io_lock:
+                    data = handle.read(frames, dtype="float32", always_2d=True)
+                    count = len(data)
+                    current_frame = int(handle.tell())
                 with self._play_lock:
-                    self._play_frames_read = min(self._play_total_frames, self._play_frames_read + count)
+                    self._play_frames_read = min(self._play_total_frames, current_frame)
                 outdata.fill(0.0)
                 if count:
                     mono = np.mean(data, axis=1, dtype=np.float32)
@@ -590,6 +597,22 @@ class AudioEngine:
         except Exception:
             handle.close()
             raise
+
+
+    def seek_playback(self, seconds: float) -> float:
+        """Seek active take playback and return the clamped position in seconds."""
+        with self._play_lock:
+            handle = self._play_file
+            total = int(self._play_total_frames)
+            rate = int(self._play_sample_rate or 1)
+        if handle is None:
+            raise RuntimeError("No take is currently playing.")
+        frame = max(0, min(total, int(max(0.0, float(seconds)) * rate)))
+        with self._play_io_lock:
+            handle.seek(frame)
+        with self._play_lock:
+            self._play_frames_read = frame
+        return float(frame) / float(rate or 1)
 
     def stop_playback(self) -> None:
         with self._play_lock:
