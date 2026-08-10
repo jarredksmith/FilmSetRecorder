@@ -10,7 +10,7 @@ import numpy as np
 import soundfile as sf
 
 from filmrecorder.session import ProjectSession, TakeMetadata
-from filmrecorder.utils import safe_filename_component
+from filmrecorder.utils import advance_take_number, safe_filename_component
 
 
 class SessionTests(unittest.TestCase):
@@ -57,6 +57,14 @@ class SessionTests(unittest.TestCase):
             data = json.loads(audio.with_suffix(".json").read_text(encoding="utf-8"))
             self.assertTrue(data["circle"])
 
+
+
+    def test_take_number_advances_after_successful_finalize(self):
+        self.assertEqual(advance_take_number(3, 3), 4)
+        self.assertEqual(advance_take_number(99999, 99999), 99999)
+
+    def test_take_number_does_not_overwrite_operator_change(self):
+        self.assertEqual(advance_take_number(7, 3), 7)
 
     def test_repair_pcm_wav_header_after_interruption(self):
         with tempfile.TemporaryDirectory() as temp:

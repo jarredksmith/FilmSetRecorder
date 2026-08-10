@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDoubleSpinBox,
     QFileDialog,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -50,7 +51,7 @@ from .logging_setup import configure_logging, install_exception_hook
 from .power import PowerInhibitor
 from .session import ProjectSession, TakeMetadata
 from .theme import APP_STYLESHEET
-from .utils import format_duration, resource_path
+from .utils import advance_take_number, format_duration, resource_path
 from .version import APP_NAME, APP_VERSION, ORGANIZATION_NAME
 from .widgets import Card, StatusPill, TrackRow, TransportButton
 
@@ -797,8 +798,14 @@ class MainWindow(QMainWindow):
             # Do this only after the WAV and metadata are safely written so a
             # failed/partial take never silently skips a take number.
             completed_take = int(snapshot.get("take", self.take_spin.value()))
-            if self.take_spin.value() == completed_take:
-                self.take_spin.setValue(min(self.take_spin.maximum(), completed_take + 1))
+            next_take = advance_take_number(
+                self.take_spin.value(), completed_take, self.take_spin.maximum()
+            )
+            if next_take != self.take_spin.value():
+                self.take_spin.setValue(next_take)
+            # Persist the advanced slate immediately so a normal restart opens
+            # on the next take even if no other settings are changed.
+            self._save_settings()
             self.notes.clear()
             self.status_text.setText(
                 f"Saved {final_path.name}  |  {format_duration(metadata.duration_seconds)}  |  XRUN {metadata.xruns}"

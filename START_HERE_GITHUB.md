@@ -6,8 +6,8 @@
 2. Open the repository's **Actions** tab.
 3. Select **Build Windows Installer**.
 4. Click **Run workflow**.
-5. Download `FilmSetRecorder-Windows-Installer-v0.6.0` from **Artifacts**.
-6. Unzip it and install `FilmSetRecorder_Setup_0.6.0.exe`.
+5. Download `FilmSetRecorder-Windows-Installer-v0.6.1` from **Artifacts**.
+6. Unzip it and install `FilmSetRecorder_Setup_0.6.1.exe`.
 
 The recording computer does not need Python installed.
 
@@ -18,8 +18,8 @@ The recording computer does not need Python installed.
 3. Click **Run workflow**.
 4. Wait for both Mac build jobs to complete.
 5. Download the artifact matching the Mac:
-   - `FilmSetRecorder-macOS-v0.6.0-arm64` for Apple Silicon (M-series)
-   - `FilmSetRecorder-macOS-v0.6.0-x86_64` for Intel
+   - `FilmSetRecorder-macOS-v0.6.1-arm64` for Apple Silicon (M-series)
+   - `FilmSetRecorder-macOS-v0.6.1-x86_64` for Intel
 6. Unzip the artifact, open the `.dmg`, and drag **FilmSetRecorder.app** to **Applications**.
 7. See `MAC_INSTALL.md` for first-launch and permissions instructions.
 

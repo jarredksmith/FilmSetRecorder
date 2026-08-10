@@ -31,6 +31,20 @@ def format_duration(seconds: float, milliseconds: bool = False) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
+def advance_take_number(current: int, completed: int, maximum: int = 99999) -> int:
+    """Return the next slate take after a successful finalization.
+
+    If the operator changed the slate while the completed take was being
+    finalized, preserve that newer value instead of overwriting it.
+    """
+    current = int(current)
+    completed = int(completed)
+    maximum = max(1, int(maximum))
+    if current == completed:
+        return min(maximum, completed + 1)
+    return current
+
+
 def app_data_dir() -> Path:
     if sys.platform.startswith("win"):
         root = Path(os.environ.get("LOCALAPPDATA", Path.home()))

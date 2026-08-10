@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+- Fixed v0.6 startup crash (`QFrame` missing from the QtWidgets import list).
+- Added a static UI import regression test.
+- Automatic post-finalization take advancement remains enabled.
+
 ## 0.6.0
 
 - Rebuilt the desktop interface as a restrained production-sound console.
