@@ -3,13 +3,12 @@ from __future__ import annotations
 import math
 import time
 
-from PySide6.QtCore import QPointF, QSize, Qt, Signal
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen
-
-from .ui_icons import make_icon
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -18,6 +17,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from .ui_icons import make_icon
 
 
 class DeviceComboBox(QComboBox):
@@ -67,29 +68,42 @@ class Card(QFrame):
 
 
 class StatusPill(QFrame):
-    """Compact status card with a real product icon and text.
+    """Compact two-line status card matching the recorder header mockup."""
 
-    Kept API-compatible with the old QLabel-based StatusPill so the recorder
-    state code can continue to call setText()/set_tone().
-    """
-    def __init__(self, text: str = "", tone: str = "neutral", icon: QIcon | None = None, parent=None):
+    def __init__(
+        self,
+        text: str = "",
+        tone: str = "neutral",
+        icon: QIcon | None = None,
+        detail: str = "",
+        parent=None,
+    ):
         super().__init__(parent)
         self.setObjectName("StatusPill")
-        self.setMinimumHeight(42)
+        self.setMinimumHeight(52)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 5, 11, 5)
-        layout.setSpacing(7)
+        layout.setContentsMargins(11, 6, 12, 6)
+        layout.setSpacing(8)
+
         self.icon_label = QLabel()
         self.icon_label.setObjectName("StatusPillIcon")
-        self.icon_label.setFixedSize(20, 20)
+        self.icon_label.setFixedSize(22, 22)
         self.icon_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.icon_label)
+
+        text_stack = QVBoxLayout()
+        text_stack.setSpacing(0)
         self.text_label = QLabel(text)
         self.text_label.setObjectName("StatusPillText")
-        self.text_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.text_label)
+        self.detail_label = QLabel(detail)
+        self.detail_label.setObjectName("StatusPillDetail")
+        self.detail_label.setVisible(bool(detail))
+        text_stack.addWidget(self.text_label)
+        text_stack.addWidget(self.detail_label)
+        layout.addLayout(text_stack)
+
         if icon is not None and not icon.isNull():
-            self.icon_label.setPixmap(icon.pixmap(QSize(18, 18)))
+            self.icon_label.setPixmap(icon.pixmap(QSize(19, 19)))
         self.set_tone(tone)
 
     def setText(self, text: str) -> None:
@@ -98,33 +112,49 @@ class StatusPill(QFrame):
     def text(self) -> str:
         return self.text_label.text()
 
+    def set_detail(self, detail: str) -> None:
+        detail = str(detail or "")
+        self.detail_label.setText(detail)
+        self.detail_label.setVisible(bool(detail))
+
     def set_tone(self, tone: str) -> None:
         self.setProperty("tone", tone)
         self.style().unpolish(self)
         self.style().polish(self)
-        for child in (self.icon_label, self.text_label):
+        for child in (self.icon_label, self.text_label, self.detail_label):
             child.style().unpolish(child)
             child.style().polish(child)
         self.update()
 
 
 class PeakMeter(QWidget):
+    """Production-style segmented peak/RMS meter with calibrated dBFS scale."""
+
+    SCALE = (-60, -48, -36, -24, -18, -12, -6, -3, 0)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._level_db = -80.0
+        self._rms_db = -80.0
         self._peak_db = -80.0
         self._peak_time = 0.0
         self._clipped_until = 0.0
-        self.setMinimumHeight(34)
+        self.setMinimumHeight(58)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     @property
     def level_db(self) -> float:
         return self._level_db
 
-    def set_level(self, db: float) -> None:
+    @property
+    def rms_db(self) -> float:
+        return self._rms_db
+
+    def set_level(self, db: float, rms_db: float | None = None) -> None:
         db = max(-80.0, min(3.0, float(db)))
+        rms_db = db if rms_db is None else max(-80.0, min(3.0, float(rms_db)))
         self._level_db = db
+        self._rms_db = rms_db
         now = time.monotonic()
         if db >= self._peak_db or now - self._peak_time > 1.5:
             self._peak_db = db
@@ -137,6 +167,7 @@ class PeakMeter(QWidget):
 
     def reset_peak(self) -> None:
         self._peak_db = -80.0
+        self._rms_db = -80.0
         self._peak_time = 0.0
         self._clipped_until = 0.0
         self.update()
@@ -146,52 +177,77 @@ class PeakMeter(QWidget):
         db = max(-60.0, min(0.0, db))
         return (db + 60.0) / 60.0
 
-    def paintEvent(self, event) -> None:
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        rect = self.rect().adjusted(1, 4, -1, -5)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor("#06111B"))
-        painter.drawRoundedRect(rect, 4, 4)
+    @staticmethod
+    def _segment_color(db: float, bright: bool = True) -> QColor:
+        if not bright:
+            return QColor("#0F2A40")
+        if db < -24:
+            return QColor("#04D6CC")
+        if db < -12:
+            return QColor("#31E95D")
+        if db < -6:
+            return QColor("#CDE91C")
+        if db < -3:
+            return QColor("#FFC326")
+        return QColor("#FF454F")
 
-        # Segmented meter reads as instrumentation rather than a progress bar.
-        segments = 72
-        gap = 2
-        usable = max(1, rect.width() - gap * (segments - 1))
-        seg_w = max(1, usable / segments)
-        lit = int(round(self._fraction(self._level_db) * segments))
+    def _draw_bar(self, painter: QPainter, rect: QRectF, level_db: float, alpha: float = 1.0) -> None:
+        segments = 76
+        gap = 1.8
+        usable = max(1.0, rect.width() - gap * (segments - 1))
+        seg_w = max(1.0, usable / segments)
+        lit = int(round(self._fraction(level_db) * segments))
         for i in range(segments):
             x = rect.x() + i * (seg_w + gap)
             db = -60.0 + (i / max(1, segments - 1)) * 60.0
-            if i < lit:
-                if db < -18:
-                    color = QColor("#08D9C4")
-                elif db < -12:
-                    color = QColor("#38E85B")
-                elif db < -6:
-                    color = QColor("#D7E91A")
-                elif db < -3:
-                    color = QColor("#FFC928")
-                else:
-                    color = QColor("#FF4A42")
-            else:
-                color = QColor("#10263A")
+            color = self._segment_color(db, i < lit)
+            if i < lit and alpha < 1.0:
+                color.setAlphaF(alpha)
             painter.setBrush(color)
-            painter.drawRoundedRect(int(x), rect.y()+4, max(1,int(seg_w)), max(3,rect.height()-8), 1, 1)
+            painter.drawRoundedRect(QRectF(x, rect.y(), max(1.0, seg_w), rect.height()), 1.0, 1.0)
 
-        peak_x = rect.x() + int(rect.width() * self._fraction(self._peak_db))
-        painter.setPen(QPen(QColor("#F7FBFF"), 2))
-        painter.drawLine(peak_x, rect.y()+2, peak_x, rect.bottom()-2)
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        full = self.rect().adjusted(2, 1, -3, -2)
+        scale_h = 16
+        meter_top = full.top() + scale_h
+        meter_width = full.width()
+
+        # Scale labels and calibration ticks.
+        font = QFont(self.font())
+        font.setPixelSize(8)
+        painter.setFont(font)
+        painter.setPen(QColor("#8CA3B9"))
+        for db in self.SCALE:
+            frac = self._fraction(float(db))
+            x = full.left() + meter_width * frac
+            text = str(db)
+            tw = painter.fontMetrics().horizontalAdvance(text)
+            painter.drawText(int(x - tw / 2), int(full.top() + 9), text)
+            painter.setPen(QPen(QColor("#38546D"), 1))
+            painter.drawLine(QPointF(x, meter_top - 1), QPointF(x, meter_top + 3))
+            painter.setPen(QColor("#8CA3B9"))
+
+        peak_rect = QRectF(full.left(), meter_top + 3, meter_width, 12)
+        rms_rect = QRectF(full.left(), meter_top + 19, meter_width, 8)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#07131F"))
+        painter.drawRoundedRect(peak_rect.adjusted(-1, -1, 1, 1), 3, 3)
+        painter.drawRoundedRect(rms_rect.adjusted(-1, -1, 1, 1), 3, 3)
+        self._draw_bar(painter, peak_rect, self._level_db, 1.0)
+        self._draw_bar(painter, rms_rect, self._rms_db, 0.78)
+
+        peak_x = peak_rect.left() + peak_rect.width() * self._fraction(self._peak_db)
+        painter.setPen(QPen(QColor("#F8FBFF"), 2))
+        painter.drawLine(QPointF(peak_x, peak_rect.top() - 2), QPointF(peak_x, rms_rect.bottom() + 1))
 
         if time.monotonic() < self._clipped_until:
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor("#FF3344"))
-            painter.drawRoundedRect(rect.right()-7, rect.y(), 7, rect.height(), 2, 2)
-
-        painter.setPen(QPen(QColor("#42627C"), 1))
-        for db in (-48, -36, -24, -18, -12, -6, -3):
-            x = rect.x() + int(rect.width() * self._fraction(float(db)))
-            painter.drawLine(x, rect.bottom()-3, x, rect.bottom())
+            painter.drawRoundedRect(QRectF(full.right() - 5, peak_rect.top(), 5, rms_rect.bottom() - peak_rect.top()), 2, 2)
+        painter.end()
 
 
 class TrackRow(QFrame):
@@ -202,62 +258,91 @@ class TrackRow(QFrame):
         super().__init__(parent)
         self.channel_index = channel_index
         self.setObjectName("TrackRow")
-        self.setMinimumHeight(58)
+        self.setMinimumHeight(76)
+        self.setMaximumHeight(84)
 
         row = QHBoxLayout(self)
-        row.setContentsMargins(9, 6, 9, 6)
-        row.setSpacing(7)
+        row.setContentsMargins(7, 5, 10, 5)
+        row.setSpacing(9)
+
+        accent = QFrame()
+        accent.setObjectName("TrackAccent")
+        accents = ["#168BFF", "#9A4DFF", "#11D5C5", "#FF7A22", "#E84F8A", "#54C46F"]
+        accent.setStyleSheet(f"background:{accents[channel_index % len(accents)]}; border:0; border-radius:2px;")
+        accent.setFixedSize(5, 54)
+        row.addWidget(accent)
 
         self.channel_label = QLabel(f"{channel_index + 1:02d}")
         self.channel_label.setObjectName("ChannelNumber")
-        accents = ["#168BFF", "#9A4DFF", "#11D5C5", "#FF7A22"]
-        accent = accents[channel_index % len(accents)]
-        self.channel_label.setStyleSheet(f"border-left: 4px solid {accent}; padding-left: 7px;")
-        self.channel_label.setFixedWidth(40)
+        self.channel_label.setAlignment(Qt.AlignCenter)
+        self.channel_label.setFixedWidth(35)
         row.addWidget(self.channel_label)
+
+        identity = QWidget()
+        identity.setObjectName("TrackIdentity")
+        ident_l = QVBoxLayout(identity)
+        ident_l.setContentsMargins(0, 0, 0, 0)
+        ident_l.setSpacing(2)
+        self.name_edit = QLineEdit(name)
+        self.name_edit.setObjectName("TrackName")
+        self.name_edit.setMinimumWidth(108)
+        self.name_edit.setMaximumWidth(150)
+        self.name_edit.editingFinished.connect(
+            lambda: self.nameChanged.emit(self.channel_index, self.name_edit.text().strip())
+        )
+        ident_l.addWidget(self.name_edit)
 
         self.arm_button = QPushButton()
         self.arm_button.setObjectName("ArmButton")
         self.arm_button.setCheckable(True)
         self.arm_button.setChecked(True)
-        self.arm_button.setFixedWidth(78)
+        self.arm_button.setFixedSize(76, 24)
         self.arm_button.setToolTip(
             "Record-enable this input. REC means its audio is written to the take; "
-            "OFF means the input is still metered but its recorded channel is silent."
+            "OFF means the input stays visible on the meter but is written as silence."
         )
         self.arm_button.toggled.connect(self._arm_state_changed)
         self._update_arm_button(True)
-        row.addWidget(self.arm_button)
-
-        self.name_edit = QLineEdit(name)
-        self.name_edit.setObjectName("TrackName")
-        self.name_edit.setMinimumWidth(92)
-        self.name_edit.setMaximumWidth(180)
-        self.name_edit.editingFinished.connect(
-            lambda: self.nameChanged.emit(self.channel_index, self.name_edit.text().strip())
-        )
-        row.addWidget(self.name_edit)
+        ident_l.addWidget(self.arm_button, 0, Qt.AlignLeft)
+        row.addWidget(identity)
 
         self.meter = PeakMeter()
         row.addWidget(self.meter, 1)
 
-        self.db_label = QLabel("-inf")
-        self.db_label.setObjectName("DbReadout")
-        self.db_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.db_label.setFixedWidth(54)
-        row.addWidget(self.db_label)
+        values = QWidget()
+        values.setObjectName("MeterReadouts")
+        vg = QGridLayout(values)
+        vg.setContentsMargins(0, 0, 0, 0)
+        vg.setHorizontalSpacing(12)
+        vg.setVerticalSpacing(0)
+        peak_title = QLabel("PEAK")
+        peak_title.setObjectName("MeterLabel")
+        rms_title = QLabel("RMS")
+        rms_title.setObjectName("MeterLabel")
+        self.db_label = QLabel("-inf dB")
+        self.db_label.setObjectName("MeterValue")
+        self.rms_label = QLabel("-inf dB")
+        self.rms_label.setObjectName("MeterValueSecondary")
+        for lab in (peak_title, rms_title, self.db_label, self.rms_label):
+            lab.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        vg.addWidget(peak_title, 0, 0)
+        vg.addWidget(rms_title, 0, 1)
+        vg.addWidget(self.db_label, 1, 0)
+        vg.addWidget(self.rms_label, 1, 1)
+        values.setFixedWidth(134)
+        row.addWidget(values)
 
         self.clip_label = QLabel("CLIP")
         self.clip_label.setObjectName("ClipBadge")
         self.clip_label.setAlignment(Qt.AlignCenter)
-        self.clip_label.setFixedWidth(42)
+        self.clip_label.setFixedWidth(38)
         self.clip_label.setVisible(False)
         row.addWidget(self.clip_label)
 
     def _update_arm_button(self, armed: bool) -> None:
         self.arm_button.setText("REC" if armed else "OFF")
         self.arm_button.setIcon(make_icon("record", 40) if armed else QIcon())
-        self.arm_button.setIconSize(QSize(12, 12))
+        self.arm_button.setIconSize(QSize(10, 10))
         self.arm_button.setProperty("recordState", "armed" if armed else "off")
         self.arm_button.setAccessibleName(
             f"Track {self.channel_index + 1} record enabled" if armed
@@ -271,12 +356,17 @@ class TrackRow(QFrame):
         self._update_arm_button(armed)
         self.armedChanged.emit(self.channel_index, armed)
 
-    def set_level(self, db: float) -> None:
-        self.meter.set_level(db)
+    @staticmethod
+    def _format_db(db: float) -> str:
         if db <= -79.0 or not math.isfinite(db):
-            self.db_label.setText("-inf")
-        else:
-            self.db_label.setText(f"{db:5.1f}")
+            return "-inf dB"
+        return f"{db:.1f} dB"
+
+    def set_level(self, db: float, rms_db: float | None = None) -> None:
+        rms_db = db if rms_db is None else rms_db
+        self.meter.set_level(db, rms_db)
+        self.db_label.setText(self._format_db(db))
+        self.rms_label.setText(self._format_db(rms_db))
         self.clip_label.setVisible(db >= -0.1)
 
     def set_locked(self, locked: bool) -> None:
@@ -290,7 +380,55 @@ class TrackRow(QFrame):
         return self.name_edit.text().strip() or f"Input {self.channel_index + 1}"
 
 
+class TransportControl(QWidget):
+    """Circular transport control with an adjacent label and shortcut badge."""
+
+    def __init__(
+        self,
+        label: str,
+        icon: QIcon,
+        role: str = "secondary",
+        shortcut: str = "",
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.setObjectName("TransportControl")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+
+        self.button = QPushButton()
+        self.button.setObjectName("TransportCircle")
+        self.button.setProperty("role", role)
+        size = 84 if role == "record" else 76
+        self.button.setFixedSize(size, size)
+        self.button.setIcon(icon)
+        self.button.setIconSize(QSize(31 if role == "record" else 28, 31 if role == "record" else 28))
+        self.button.setCursor(Qt.PointingHandCursor)
+        layout.addWidget(self.button)
+
+        text = QVBoxLayout()
+        text.setSpacing(4)
+        self.label = QLabel(label)
+        self.label.setObjectName("TransportLabel")
+        text.addWidget(self.label)
+        self.shortcut = QLabel(shortcut)
+        self.shortcut.setObjectName("ShortcutBadge")
+        self.shortcut.setAlignment(Qt.AlignCenter)
+        self.shortcut.setFixedWidth(max(24, 11 + len(shortcut) * 7))
+        self.shortcut.setVisible(bool(shortcut))
+        text.addWidget(self.shortcut, 0, Qt.AlignLeft)
+        text.addStretch(1)
+        layout.addLayout(text)
+        layout.addStretch(1)
+
+    def set_label(self, label: str) -> None:
+        self.label.setText(label)
+
+
 class TransportButton(QPushButton):
+    """Legacy rectangular transport button retained for compatibility."""
+
     def __init__(self, text: str, role: str = "secondary", icon: QIcon | None = None, parent=None):
         super().__init__(text, parent)
         self.setProperty("role", role)

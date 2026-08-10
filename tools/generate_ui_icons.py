@@ -175,4 +175,10 @@ def reveal(d):
     d.ellipse((58,118,326,266),outline=FG,width=20); d.ellipse((155,155,229,229),fill=BLUE)
 save('reveal',reveal)
 
+
+def plusi(d):
+    line(d,[(192,96),(192,288)],fill=BLUE,width=22)
+    line(d,[(96,192),(288,192)],fill=BLUE,width=22)
+save('plus',plusi)
+
 print(f'generated {len(list(OUT.glob("*.png")))} icons in {OUT}')

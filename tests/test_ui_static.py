@@ -43,7 +43,7 @@ class RecorderRoutingStaticTests(unittest.TestCase):
     def test_input_device_is_exposed_in_record_and_system_workspaces(self):
         self.assertIn('self.input_combo = DeviceComboBox()', self.source)
         self.assertIn('self.system_input_combo = DeviceComboBox()', self.source)
-        self.assertIn('("INPUT DEVICE",self.system_input_combo)', self.source)
+        self.assertIn('("INPUT DEVICE", self.system_input_combo)', self.source)
         self.assertIn('def _sync_input_device', self.source)
 
     def test_real_ui_icons_are_referenced(self):
@@ -73,3 +73,30 @@ class UIIconAndArmStaticTests(unittest.TestCase):
         self.assertIn('self.arm_button.setText("REC" if armed else "OFF")', self.widgets)
         self.assertIn('Record-enable this input', self.widgets)
         self.assertIn('QPushButton#ArmButton:checked', (self.root / 'filmrecorder' / 'theme.py').read_text(encoding='utf-8'))
+
+
+class MockupParityStaticTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(__file__).resolve().parents[1]
+        self.main = (self.root / "filmrecorder" / "main_window.py").read_text(encoding="utf-8")
+        self.widgets = (self.root / "filmrecorder" / "widgets.py").read_text(encoding="utf-8")
+        self.theme = (self.root / "filmrecorder" / "theme.py").read_text(encoding="utf-8")
+
+    def test_dynamic_add_input_control_tracks_hardware_capacity(self):
+        self.assertIn('self.add_input_btn = QPushButton("ADD INPUT")', self.main)
+        self.assertIn('def _add_input_track', self.main)
+        self.assertIn('_selected_device_max_inputs', self.main)
+        self.assertIn('self.channels_spin.setValue(current + 1)', self.main)
+
+    def test_mockup_transport_and_production_strip_are_present(self):
+        self.assertIn('TransportControl("RECORD"', self.main)
+        self.assertIn('TransportControl("CIRCLE"', self.main)
+        self.assertIn('production_strip.setObjectName("ProductionStrip")', self.main)
+        self.assertIn('self.history_rows', self.main)
+        self.assertIn('self.quick_notes = QTextEdit()', self.main)
+        self.assertIn('QPushButton#TransportCircle', self.theme)
+
+    def test_meter_supports_peak_and_rms(self):
+        self.assertIn('self._rms_db', self.widgets)
+        self.assertIn('RMS', self.widgets)
+        self.assertIn('rms_values', self.main)

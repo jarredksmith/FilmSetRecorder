@@ -40,7 +40,7 @@ class AudioEngine:
     The file is atomically renamed to its final name only after a clean stop.
     """
 
-    def __init__(self, meter_callback: Optional[Callable[[list[float]], None]] = None):
+    def __init__(self, meter_callback: Optional[Callable[..., None]] = None):
         self.meter_callback = meter_callback
         self.stream: Optional[sd.InputStream] = None
         self.device_index: Optional[int] = None
@@ -249,9 +249,17 @@ class AudioEngine:
             LOGGER.warning("PortAudio input status: %s", status)
 
         peaks = np.max(np.abs(indata), axis=0)
+        rms = np.sqrt(np.mean(np.square(indata, dtype=np.float64), axis=0))
         db = 20.0 * np.log10(np.maximum(peaks, 1e-8))
+        rms_db = 20.0 * np.log10(np.maximum(rms, 1e-8))
         if self.meter_callback is not None:
-            self.meter_callback([float(v) for v in db])
+            peak_values = [float(v) for v in db]
+            rms_values = [float(v) for v in rms_db]
+            try:
+                self.meter_callback(peak_values, rms_values)
+            except TypeError:
+                # Compatibility with older single-argument meter callbacks.
+                self.meter_callback(peak_values)
 
         block = indata.copy()
         with self._callback_state_lock:

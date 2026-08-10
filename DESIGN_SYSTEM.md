@@ -50,3 +50,16 @@ Meters are segmented and calibrated from -60 to 0 dBFS with peak hold and clip l
 FilmSet uses a dedicated product icon set in `assets/icons/`. Icons are functional, not decorative: navigation, transport, recorder health, audio routing, file actions, remote pairing and diagnostics all use the same restrained line language. Avoid replacing these with emoji, Unicode glyphs, or platform-dependent symbol fonts.
 
 The icon set is rasterized with transparency so it packages consistently on both Windows and macOS through PyInstaller.
+
+## v0.6.5 mockup-parity rules
+
+The approved `assets/DESIGN_REFERENCE_v0_6.png` is the visual reference for the Record workspace. New UI work should preserve these priorities:
+
+- circular transport controls, never five equal rectangular dashboard buttons
+- slate values are visually dominant, not generic small form fields
+- ISO tracks read as audio instrumentation with calibrated dBFS scale, peak hold, and RMS context
+- recorder clock is `HH:MM:SS:FF` and visually anchors the right-side recorder module
+- status cards use a concise title plus one secondary detail line
+- the Record workspace always exposes last take, recent history, and current notes without opening another page
+- hardware channel capacity is discoverable through an inline Add Input control when unused inputs exist
+- settings remain secondary to recording state and metering

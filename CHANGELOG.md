@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.4
+## 0.6.5
 - Replaced file-dependent desktop UI icons with runtime-rendered vector-style Qt icons.
 - Fixed packaged builds where sidebar/transport/status icons disappeared.
 - Made the application window icon independent of packaged PNG lookup.

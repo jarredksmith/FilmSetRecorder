@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-Write-Host "=== FilmSet Recorder 0.6.4 Windows Builder ===" -ForegroundColor Cyan
+Write-Host "=== FilmSet Recorder 0.6.5 Windows Builder ===" -ForegroundColor Cyan
 
 if (-not (Get-Command py -ErrorAction SilentlyContinue) -and -not (Get-Command python -ErrorAction SilentlyContinue)) {
     throw "Python was not found. Install Python 3.12 (64-bit) and rerun this script. GitHub Actions users do not need Python locally."
@@ -53,4 +53,4 @@ if (-not $iscc) {
 
 Write-Host ""
 Write-Host "Build complete." -ForegroundColor Green
-Write-Host "Installer: release\FilmSetRecorder_Setup_0.6.4.exe" -ForegroundColor Green
+Write-Host "Installer: release\FilmSetRecorder_Setup_0.6.5.exe" -ForegroundColor Green

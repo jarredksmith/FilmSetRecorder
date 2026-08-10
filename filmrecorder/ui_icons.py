@@ -116,6 +116,14 @@ def icon_pixmap(name: str, size: int = 64) -> QPixmap:
         p.setPen(_pen(FG,3.5)); p.setBrush(Qt.NoBrush); p.drawEllipse(QRectF(13,13,38,38)); f=QFont(); f.setBold(True); f.setPixelSize(28); p.setFont(f); p.drawText(QRectF(13,11,38,40),Qt.AlignCenter,'?')
     elif n == 'dropdown':
         p.setPen(_pen(FG,4)); p.drawLine(QPointF(20,26),QPointF(32,38)); p.drawLine(QPointF(32,38),QPointF(44,26))
+    elif n in ('plus','add'):
+        p.setPen(_pen(BLUE,4.5)); p.drawLine(QPointF(32,14),QPointF(32,50)); p.drawLine(QPointF(14,32),QPointF(50,32))
+    elif n == 'more':
+        p.setPen(Qt.NoPen); p.setBrush(FG)
+        for y in (18,32,46): p.drawEllipse(QRectF(28,y-4,8,8))
+    elif n == 'edit':
+        p.setPen(_pen(FG,3.5)); p.drawRoundedRect(QRectF(12,12,40,40),4,4)
+        p.setPen(_pen(BLUE,4)); p.drawLine(QPointF(23,42),QPointF(45,20)); p.drawLine(QPointF(20,45),QPointF(27,43))
     else:
         p.setPen(_pen(BLUE,4)); p.drawEllipse(QRectF(20,20,24,24))
 
